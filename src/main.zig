@@ -39,7 +39,7 @@ pub fn main(init: std.process.Init) !void {
 
     const result = switch (cmd.verb) {
         .help => out.writeAll(cli.usage),
-        .version => out.print("veneer {s}\n", .{build_info.version}),
+        .version => out.print("veneer {s}\n{s}", .{ build_info.version, cli.notice }),
         .window => gui.run(gpa, io, init.environ_map) catch |err| {
             std.log.err("could not open the window ({s}); every feature is also on the command line, see `veneer help`", .{@errorName(err)});
             std.process.exit(1);

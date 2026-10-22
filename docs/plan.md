@@ -14,7 +14,14 @@ leaves the install as it found it. The word is short, easy to type in a
 terminal, and does not collide with a known Linux gaming tool.
 
 Also considered: *Overlay* (taken by every game overlay), *Shim* (too
-technical), *Lens* (says upscaling but not launching).
+technical), *Lens* (says upscaling but not launching). The name is settled.
+
+## License
+
+GPL-3.0-or-later ([LICENSE](../LICENSE)), the license family of OptiScaler,
+Lutris and Heroic. Forks that ship must stay open, and code can move between
+Veneer and those projects. Every dependency (dvui MIT, SDL3 zlib, FreeType,
+stb) is compatible.
 
 ## Principles
 
@@ -162,10 +169,8 @@ gamescope and creating namespaces, which Veneer needs.
 
 | Question | Decide by |
 | --- | --- |
-| License: GPL-3.0-or-later or MIT? | before the repository goes public |
 | OptiScaler ships as `.7z`. Write a 7z reader in Zig, or require `7z` or `bsdtar` on the host? | M7 |
 | Distributions that restrict unprivileged user namespaces (Ubuntu's AppArmor policy): ship a profile, or rely on injection only? | M6 |
 | Launching outside the Steam UI loses the Steam overlay and may lose playtime tracking. Preload Steam's overlay library, or accept the loss? | M2 |
 | Third-party Protons (GE-Proton, Proton-EM): offer downloads from GitHub, or only list what the player installed? | M8 |
 | A font for the window: ship one (Inter, OFL) or use dvui's default? | M4 |
-| Confirm the name before the first release. | M9 |

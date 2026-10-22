@@ -16,5 +16,6 @@
         "data",
         "docs",
         "README.md",
+        "LICENSE",
     },
 }

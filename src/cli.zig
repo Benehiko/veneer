@@ -90,6 +90,13 @@ pub const Flags = struct {
     }
 };
 
+pub const notice =
+    \\Copyright (C) the Veneer contributors
+    \\License GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0.html>
+    \\This is free software: you may change and share it. There is NO WARRANTY.
+    \\
+;
+
 pub const usage =
     \\usage: veneer [command]
     \\
@@ -120,6 +127,8 @@ pub const usage =
     \\  env=NAME=value                        repeat for more; env= clears them
     \\  args="..."                            extra game arguments
     \\  gamescope-args="..."                  extra gamescope arguments
+    \\
+    \\Veneer is free software under GPL-3.0-or-later, with NO WARRANTY.
     \\
 ;
 

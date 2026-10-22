@@ -44,6 +44,13 @@ make run      # build and run
 make install  # veneer and its desktop entry under ~/.local (PREFIX=...)
 ```
 
+## License
+
+Veneer is free software, licensed under the
+[GNU General Public License, version 3 or later](LICENSE)
+(GPL-3.0-or-later), the same family as OptiScaler. It comes with no
+warranty.
+
 ## Docs
 
 - [docs/plan.md](docs/plan.md): goals, design decisions and milestones
