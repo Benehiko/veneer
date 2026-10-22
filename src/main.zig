@@ -87,4 +87,7 @@ test {
     _ = @import("config/zonfile.zig");
     _ = @import("library/cache.zig");
     _ = @import("hooks/optiscaler.zig");
+    _ = @import("optiscaler/releases.zig");
+    _ = @import("optiscaler/unpack.zig");
+    _ = @import("optiscaler/install.zig");
 }

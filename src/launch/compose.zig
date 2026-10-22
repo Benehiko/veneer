@@ -71,7 +71,7 @@ fn hooks(arena: Allocator, io: Io, env: *const Environ.Map, game: Game, runner: 
     var ovl: ?plan.Overlay = null;
     if (over.overlay) {
         const dirs = try overlayDirs(arena, env, game.id);
-        const exe_rel = optiscaler.exeDirWithin(game.install_dir, game.exe.?);
+        const exe_rel = try optiscaler.targetWithin(arena, io, game.install_dir, game.exe.?);
         if (over.optiscaler_dir != null and exe_rel == null) return error.ExeOutsideInstall;
         if (!over.dry_run) {
             try Io.Dir.cwd().createDirPath(io, dirs.upper);

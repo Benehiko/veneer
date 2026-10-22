@@ -17,7 +17,8 @@ veneer                                   # the window
 veneer list                              # every game found
 veneer run "ELDEN RING" --dry-run        # print the launch; change nothing
 veneer set sekiro display=gamescope upscaling=fsr scale=67
-veneer optiscaler ~/Downloads/OptiScaler_0.x   # an extracted release
+veneer optiscaler install                # download, verify, unpack (needs bsdtar, 7zz or 7z)
+veneer optiscaler ~/OptiScaler/0.9.4     # or use a release you extracted
 veneer set "Hell is Us" upscaling=optiscaler
 veneer doctor                            # what this system supports
 ```

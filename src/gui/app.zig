@@ -22,6 +22,8 @@ const cache = @import("../library/cache.zig");
 const settings_mod = @import("../config/settings.zig");
 const optiscaler = @import("../hooks/optiscaler.zig");
 const steam_client = @import("../launch/steam_client.zig");
+const opti_releases = @import("../optiscaler/releases.zig");
+const opti_install = @import("../optiscaler/install.zig");
 
 const card_w = 160;
 const card_h = 240;
@@ -82,7 +84,17 @@ const App = struct {
     sel: ?*Selection = null,
     search: [128]u8 = @splat(0),
     scanning: std.atomic.Value(bool) = .init(false),
+    installing: std.atomic.Value(bool) = .init(false),
     threads: std.ArrayList(std.Thread) = .empty,
+
+    fn startInstall(app: *App) void {
+        if (app.installing.swap(true, .acq_rel)) return;
+        const t = std.Thread.spawn(.{}, installWorker, .{app}) catch {
+            app.installing.store(false, .release);
+            return;
+        };
+        app.threads.append(app.gpa, t) catch t.detach();
+    }
 
     fn startScan(app: *App) void {
         if (app.scanning.swap(true, .acq_rel)) return;
@@ -373,6 +385,12 @@ const App = struct {
             } else {
                 dvui.labelNoFmt(@src(), "Choose the folder you extracted an OptiScaler release into.", .{}, .{ .margin = .{ .y = 4 }, .max_size_content = .width(panel_w) });
             }
+            if (!ready) {
+                const busy = app.installing.load(.acquire);
+                if (dvui.button(@src(), if (busy) "Downloading OptiScaler…" else "Download OptiScaler", .{}, .{ .expand = .horizontal }) and !busy) {
+                    app.startInstall();
+                }
+            }
             if (dvui.button(@src(), if (ready) "Change OptiScaler folder…" else "Choose OptiScaler folder…", .{}, .{ .expand = .horizontal })) {
                 if (app.pickFolder("Choose the extracted OptiScaler release")) |dir| {
                     if (optiscaler.looksLikeRelease(app.io, dir)) {
@@ -486,6 +504,24 @@ fn scanWorker(app: *App) void {
     if (app.lib) |old| freeLibrary(app.gpa, old);
     app.lib = lib;
     dvui.refresh(app.win, @src(), null);
+}
+
+fn installWorker(app: *App) void {
+    defer app.installing.store(false, .release);
+    var arena_state = std.heap.ArenaAllocator.init(app.gpa);
+    defer arena_state.deinit();
+    const a = arena_state.allocator();
+
+    const pinned = opti_releases.parse(a, opti_releases.builtin_table) catch return;
+    const release = opti_releases.newest(pinned) orelse return;
+    app.post("Downloading OptiScaler {s}…", .{release.tag});
+    const dir = opti_install.install(app.gpa, a, app.io, app.env, release) catch |err| {
+        return app.post("OptiScaler: {s}", .{opti_install.explain(err) orelse @errorName(err)});
+    };
+    settings_mod.save(app.gpa, app.io, app.env, .{ .optiscaler_dir = dir }) catch |err| {
+        return app.post("OptiScaler installed, but the setting was not saved: {s}", .{@errorName(err)});
+    };
+    app.post("OptiScaler {s} is ready", .{release.tag});
 }
 
 fn launchWorker(app: *App, id: []u8) void {

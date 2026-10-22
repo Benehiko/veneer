@@ -68,7 +68,7 @@ Veneer                  [ search...          ]   [ Add game ] [ Rescan ]
 | M4 Window | built; not yet opened on a desktop |
 | M5 Compatibility checks | done; needs sourced OptiScaler, Mesa and ROCm rules |
 | M6 Hooks | built; overlay and injection not yet run outside the build sandbox |
-| M7 OptiScaler | staging done; downloading waits on the 7z question |
+| M7 OptiScaler | done; download, verify and unpack checked with v0.9.4; not yet run in a game |
 | M8 Runners | done; not yet run |
 | M9 Release | `.desktop` file and `make install`; packaging open |
 
@@ -131,14 +131,15 @@ refusal.
 file appears in the game directory only inside the overlay, and a checksum
 of the install is unchanged after both.
 
-### M7: OptiScaler (staging done)
+### M7: OptiScaler (done)
 
-A chosen release is linked into the game's overlay beside the exe as
-`dxgi.dll`, with `WINEDLLOVERRIDES=dxgi=n,b`, and a per-game copy of
-`OptiScaler.ini`.
-
-**Still to do:** download and verify pinned releases; decide how to unpack
-`.7z` (see open questions).
+A release is linked into the game's overlay beside the exe (or the Unreal
+shipping exe) as `dxgi.dll`, with `WINEDLLOVERRIDES=dxgi=n,b`, and a
+per-game copy of `OptiScaler.ini`. The player either points Veneer at an
+extracted release or lets it download a pinned one, which Veneer unpacks
+with the host's `bsdtar`, `7zz` or `7z`; Veneer carries no 7z code
+([guide](guides/optiscaler.md)). Adding a release is one row in
+`data/optiscaler.tsv`, with the SHA-256 GitHub publishes for the asset.
 
 **Done when** OptiScaler's menu appears in a DX12 game with the install's
 checksum unchanged.
@@ -169,7 +170,6 @@ gamescope and creating namespaces, which Veneer needs.
 
 | Question | Decide by |
 | --- | --- |
-| OptiScaler ships as `.7z`. Write a 7z reader in Zig, or require `7z` or `bsdtar` on the host? | M7 |
 | Distributions that restrict unprivileged user namespaces (Ubuntu's AppArmor policy): ship a profile, or rely on injection only? | M6 |
 | Launching outside the Steam UI loses the Steam overlay and may lose playtime tracking. Preload Steam's overlay library, or accept the loss? | M2 |
 | Third-party Protons (GE-Proton, Proton-EM): offer downloads from GitHub, or only list what the player installed? | M8 |

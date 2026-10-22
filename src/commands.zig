@@ -16,6 +16,8 @@ const launcher = @import("launch/launcher.zig");
 const steam_client = @import("launch/steam_client.zig");
 const settings_mod = @import("config/settings.zig");
 const optiscaler = @import("hooks/optiscaler.zig");
+const opti_releases = @import("optiscaler/releases.zig");
+const opti_install = @import("optiscaler/install.zig");
 const facts_mod = @import("compat/facts.zig");
 const rules = @import("compat/rules.zig");
 const Game = library.Game;
@@ -262,9 +264,34 @@ pub fn run(ctx: Ctx, args: []const []const u8) !void {
 
 pub fn optiscalerDir(ctx: Ctx, args: []const []const u8) !void {
     var s = try settings_mod.load(ctx.arena, ctx.io, ctx.env);
+    const pinned = opti_releases.parse(ctx.arena, opti_releases.builtin_table) catch return fail("the built-in OptiScaler release table is malformed", .{});
+    if (args.len > 0 and std.mem.eql(u8, args[0], "releases")) {
+        for (pinned) |r| {
+            const installed = try opti_install.installedDir(ctx.arena, ctx.io, ctx.env, r.tag);
+            const in_use = if (installed) |dir| std.mem.eql(u8, dir, s.optiscaler_dir) else false;
+            try ctx.out.print("{s} {s:<8} {s}\n", .{ if (in_use) "*" else " ", r.tag, if (installed != null) "installed" else r.fileName() });
+        }
+        try ctx.out.writeAll("* in use\n");
+        return;
+    }
+    if (args.len > 0 and std.mem.eql(u8, args[0], "install")) {
+        const release = if (args.len > 1)
+            opti_releases.find(pinned, args[1]) orelse return fail("{s}", .{opti_install.explain(error.UnknownRelease).?})
+        else
+            opti_releases.newest(pinned) orelse return fail("no OptiScaler release is pinned", .{});
+        try ctx.out.print("installing OptiScaler {s}\n", .{release.tag});
+        try ctx.out.flush();
+        const dir = opti_install.install(ctx.gpa, ctx.arena, ctx.io, ctx.env, release) catch |err| {
+            return fail("{s}", .{opti_install.explain(err) orelse @errorName(err)});
+        };
+        s.optiscaler_dir = dir;
+        try settings_mod.save(ctx.gpa, ctx.io, ctx.env, s);
+        try ctx.out.print("OptiScaler {s} installed in {s}\nturn it on per game with `veneer set <game> upscaling=optiscaler`\n", .{ release.tag, dir });
+        return;
+    }
     if (args.len == 0) {
         if (s.optiscaler_dir.len == 0) {
-            try ctx.out.writeAll("no OptiScaler release chosen: `veneer optiscaler <folder you extracted it into>`\n");
+            try ctx.out.writeAll("no OptiScaler release chosen: `veneer optiscaler install`, or `veneer optiscaler <folder you extracted it into>`\n");
         } else {
             const ok = optiscaler.looksLikeRelease(ctx.io, s.optiscaler_dir);
             try ctx.out.print("{s}{s}\n", .{ s.optiscaler_dir, if (ok) "" else "  (no OptiScaler.dll there)" });

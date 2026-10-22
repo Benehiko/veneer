@@ -112,6 +112,9 @@ pub const usage =
     \\  runners                     list the Proton builds Veneer can use
     \\  doctor                      what this system supports, and known problems
     \\  optiscaler [folder]         show or choose the extracted OptiScaler release to use
+    \\  optiscaler install [tag]    download a pinned OptiScaler release, verify and unpack it
+    \\                              (needs bsdtar, 7zz or 7z; see docs/guides/optiscaler.md)
+    \\  optiscaler releases         the pinned releases, and which is installed
     \\  install-proton              ask Steam to install Proton Experimental
     \\  help                        show this text
     \\  version                     print the version

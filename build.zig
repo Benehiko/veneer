@@ -30,6 +30,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "build_info", .module = build_info }},
     });
     root.addAnonymousImport("compat_rules", .{ .root_source_file = b.path("data/compat.tsv") });
+    root.addAnonymousImport("optiscaler_releases", .{ .root_source_file = b.path("data/optiscaler.tsv") });
 
     const dvui_dep = b.dependency("dvui", .{ .target = target, .optimize = optimize, .backend = .sdl3gpu });
     root.addImport("dvui", dvui_dep.module("dvui_sdl3gpu"));

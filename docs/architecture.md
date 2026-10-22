@@ -50,10 +50,12 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/hooks/overlay.zig` | the private overlay mount (`veneer __overlay`) |
 | `src/hooks/optiscaler.zig` | staging an OptiScaler release into a game's overlay |
 | `src/hooks/anticheat.zig` | EasyAntiCheat and BattlEye detection |
+| `src/optiscaler/` | pinned releases, download and checksum, unpacking with the host's `bsdtar`, `7zz` or `7z` |
 | `src/inject/` | `veneer-inject.exe` and the variables it reads |
 | `src/compat/` | system probes (`facts`, `vulkan`) and the rule engine |
 | `src/gui/` | the dvui window (`app.zig`) and its pure model (`model.zig`) |
 | `data/compat.tsv` | compatibility rules, each with its source |
+| `data/optiscaler.tsv` | OptiScaler releases Veneer will install, with their SHA-256 |
 
 ## Where Veneer keeps its files
 
@@ -145,12 +147,24 @@ rules check both, and each refused step has its own error message.
 
 ### OptiScaler
 
-OptiScaler's own Linux setup puts `OptiScaler.dll` beside the game's exe as
-`dxgi.dll` and sets `WINEDLLOVERRIDES=dxgi=n,b`. Veneer does the same in the
-overlay: it links every file of the chosen release (`veneer optiscaler
-<folder>`) into the upper layer beside the exe, under the name
-`dxgi.dll` for the DLL, and copies `OptiScaler.ini` once so each game keeps
-its own edits.
+OptiScaler's own `setup_linux.sh` renames `OptiScaler.dll` to `dxgi.dll`
+beside the game's exe and asks for `WINEDLLOVERRIDES=dxgi=n,b`. Veneer does
+the same in the overlay: it links every file of the chosen release into the
+upper layer, under the name `dxgi.dll` for the DLL, and copies
+`OptiScaler.ini` once so each game keeps its own edits. The release's setup
+scripts and notes are left out. The target is the exe's directory, or, for
+Unreal Engine games, `<Project>/Binaries/Win64` beside the `-Shipping.exe`.
+
+The release comes from one of two places
+([guide](guides/optiscaler.md)):
+
+- a folder the player extracted (`veneer optiscaler <folder>`);
+- `veneer optiscaler install [tag]`, which downloads a release pinned in
+  `data/optiscaler.tsv` with `std.http.Client`, checks its SHA-256, lists it
+  with the first of `bsdtar`, `7zz`, `7z` on `PATH` and refuses absolute or
+  `..` paths, unpacks it into a temporary folder, refuses symlinks, and
+  renames the folder to `$XDG_DATA_HOME/veneer/optiscaler/<tag>`. Veneer has
+  no 7z code of its own.
 
 ### Injection
 

@@ -19,6 +19,7 @@
             pkgs.zig_0_17
             pkgs.gnumake
             pkgs.git
+            pkgs.libarchive
           ];
         };
       });
