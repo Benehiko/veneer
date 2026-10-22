@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+staged_py=$(git diff --cached --name-only --diff-filter=A | grep '\.py$' || true)
+for f in $staged_py; do
+    echo "pre-commit: refusing to add $f: this repository is Zig, not Python (see AGENTS.md). Override: --no-verify." >&2
+    exit 1
+done
+
+staged_zig=$(git diff --cached --name-only --diff-filter=ACM | grep '\.zig$' || true)
+[ -z "$staged_zig" ] && exit 0
+
+if ! zig fmt --check $staged_zig; then
+    echo "pre-commit: zig fmt would change the files above; run 'make fmt' and re-stage." >&2
+    exit 1
+fi
+
+zig build test

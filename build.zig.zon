@@ -1,0 +1,20 @@
+.{
+    .name = .veneer,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.17.0",
+    .fingerprint = 0xe0fb14b73771d56,
+    .dependencies = .{
+        .dvui = .{
+            .url = "git+https://github.com/david-vanderson/dvui?ref=main#275c248f6a2a80f92723ac93242310e16201a49b",
+            .hash = "dvui-0.6.0-dev-AQFJmWZLBAG6E9WSTCqdouXXCC8gF91z6oiLmZvh3e-5",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "data",
+        "docs",
+        "README.md",
+    },
+}

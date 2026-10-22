@@ -1,0 +1,215 @@
+# Architecture
+
+Repository rules live in [AGENTS.md](../AGENTS.md); the roadmap in
+[plan.md](plan.md).
+
+## One binary
+
+`veneer` is one native Linux executable, written in Zig 0.17. With no
+arguments it opens the window; with a command it runs headless, so every
+feature can be tested and scripted without the GUI (`veneer help`).
+
+The build also produces `veneer-inject.exe`, a Windows PE that runs inside
+Proton or Wine to start a game suspended and load DLLs into it. It is the
+only code that runs under Wine.
+
+```mermaid
+flowchart LR
+    UI[window / CLI] --> Lib[library + cache]
+    UI --> Cfg[per-game choices]
+    UI --> Compat[probes + rules]
+    UI --> L[launcher]
+    L --> C[compose]
+    C --> Runner[Proton / Wine / native]
+    C --> GS[gamescope argv]
+    C --> Hooks[env, overlay, inject, OptiScaler]
+    C --> P[plan: argv + env + cwd]
+    P --> X[execute: spawn, log, wait]
+```
+
+`compose` gathers what a launch needs from the system (Proton builds,
+gamescope's flags, the screen size, staged files). `plan.build` turns that
+into argv, environment and working directory. It is pure and carries most
+of the launch tests. `execute` spawns the result and logs it.
+`--dry-run` stops after `plan.build` and writes nothing.
+
+## Layout
+
+| Path | What |
+| --- | --- |
+| `src/main.zig`, `src/cli.zig`, `src/commands.zig` | entry point, argument parsing, one function per command |
+| `src/paths.zig` | XDG directories |
+| `src/library/vdf.zig` | text VDF/ACF parser |
+| `src/library/appinfo.zig` | Steam's binary `appcache/appinfo.vdf` (v27–v29): names, app types, launch entries |
+| `src/library/steam.zig` | Steam roots, `libraryfolders.vdf`, app manifests, compat-tool mapping, cover art |
+| `src/library/manual.zig` | games the player adds, in `library.zon` |
+| `src/library/cache.zig` | the last scan, so the window opens at once |
+| `src/runner/proton.zig` | Proton discovery and Steam's tool aliases |
+| `src/config/` | per-game choices, global settings, the ZON file helper |
+| `src/launch/` | `compose`, `plan`, `gamescope`, `display`, `steam_client`, `execute`, `launcher` |
+| `src/hooks/overlay.zig` | the private overlay mount (`veneer __overlay`) |
+| `src/hooks/optiscaler.zig` | staging an OptiScaler release into a game's overlay |
+| `src/hooks/anticheat.zig` | EasyAntiCheat and BattlEye detection |
+| `src/inject/` | `veneer-inject.exe` and the variables it reads |
+| `src/compat/` | system probes (`facts`, `vulkan`) and the rule engine |
+| `src/gui/` | the dvui window (`app.zig`) and its pure model (`model.zig`) |
+| `data/compat.tsv` | compatibility rules, each with its source |
+
+## Where Veneer keeps its files
+
+Nothing goes in a game's install.
+
+| Path | Holds |
+| --- | --- |
+| `$XDG_CONFIG_HOME/veneer/settings.zon` | global settings: the OptiScaler release folder |
+| `$XDG_CONFIG_HOME/veneer/library.zon` | games added by hand |
+| `$XDG_CONFIG_HOME/veneer/games/<id>.zon` | each game's choices |
+| `$XDG_DATA_HOME/veneer/prefixes/<id>` | Wine prefixes for games Steam does not own |
+| `$XDG_DATA_HOME/veneer/overlay/<id>/{upper,work}` | each game's overlay layer |
+| `$XDG_CACHE_HOME/veneer/library.zon` | the last library scan |
+| `$XDG_STATE_HOME/veneer/logs/<id>.log` | the last launch, and `.prev` before it |
+
+Config files are ZON: `std.zon` reads and writes them, so they cost no
+dependency.
+
+## Library
+
+- **Steam roots:** `~/.local/share/Steam`, `~/.steam/steam` and Flatpak's
+  `~/.var/app/com.valvesoftware.Steam/data/Steam`. Each root's
+  `steamapps/libraryfolders.vdf` lists its libraries; libraries named twice
+  are scanned once.
+- **Games:** every `appmanifest_*.acf` whose `StateFlags` has the installed
+  bit. `appinfo.vdf` supplies the name, the app type (only games,
+  applications, demos and betas are listed) and the launch entry for the
+  platform, skipping beta-branch entries.
+- **Platform:** an explicit compat-tool mapping means Windows (a Steam Linux
+  Runtime mapping means Linux); otherwise a Linux entry in `oslist` means
+  native; otherwise Windows.
+- **Cover art:** `appcache/librarycache/<appid>/library_600x900.jpg`, then
+  the older flat names, then `header.jpg`.
+- **Added games:** the executable's header decides the platform (`MZ` is
+  Windows; ELF or `#!` is Linux). The id is a hash of the path.
+
+## Runners
+
+| Choice | Meaning |
+| --- | --- |
+| `auto` | Steam's mapping for the app (`CompatToolMapping` in `config/config.vdf`), then the global default, then the newest official numbered Proton; Linux games run natively |
+| a Proton name | a directory name or internal name from `compatibilitytools.d`, `/usr/share/steam/compatibilitytools.d` or any library's `steamapps/common` |
+| `native` | Linux games only; Steam games run through the scout runtime's `run.sh` when present |
+| a path to `wine` | Wine with a prefix of the game's own |
+
+Steam games run as Steam runs them: the `proton` script with
+`waitforexitandrun` and the `STEAM_COMPAT_*` variables, in the game's own
+`compatdata` prefix. Games Steam does not own get a prefix under
+`$XDG_DATA_HOME/veneer/prefixes`. Steam games need the client for their DRM,
+so Veneer starts `steam -silent` first if `~/.steam/steam.pid` names no
+running Steam. `veneer install-proton` and the window's button send
+`steam://install/1493710` (Proton Experimental) to Steam.
+
+## gamescope
+
+Two choices reach gamescope: **Display** (normal or gamescope fullscreen)
+and **Upscaling** (FSR 1 or NIS, with a render scale of 100, 77, 67, 59 or
+50 %). FSR and NIS imply gamescope. The output size is the largest connected
+mode in `/sys/class/drm/*/modes`, overridable with `--size`. Veneer reads
+`gamescope --help` once: builds with `--filter` get `-F fsr|nis`, older ones
+get `-U` or `-Y`, and `--hdr-enabled` is passed only when offered.
+
+## Hooks without touching the game
+
+### Environment
+
+Variables only: the player's own (`env=` settings), and
+`WINEDLLOVERRIDES` for OptiScaler. The player's value wins.
+
+### Overlay
+
+`veneer __overlay <lower> <upper> <work> <cwd> -- <argv>` wraps the whole
+launch, gamescope included:
+
+1. `unshare(CLONE_NEWUSER | CLONE_NEWNS)`, then map the player's uid and gid
+   onto themselves.
+2. Make the mount tree private, and mount overlayfs (`userxattr`) on the
+   game directory's own path: the install is the read-only lower layer,
+   `$XDG_DATA_HOME/veneer/overlay/<id>/upper` the upper.
+3. `chdir` into the working directory again, because the old handle still
+   points below the mount, then exec the launch.
+
+Only that process tree sees the merged directory. Steam, its updater and
+its file check see the install unchanged. Files the game writes beside its
+exe land in the upper layer and stay with the game.
+
+This needs Linux 5.11 or later and unprivileged user namespaces; the compat
+rules check both, and each refused step has its own error message.
+
+### OptiScaler
+
+OptiScaler's own Linux setup puts `OptiScaler.dll` beside the game's exe as
+`dxgi.dll` and sets `WINEDLLOVERRIDES=dxgi=n,b`. Veneer does the same in the
+overlay: it links every file of the chosen release (`veneer optiscaler
+<folder>`) into the upper layer beside the exe, under the name
+`dxgi.dll` for the DLL, and copies `OptiScaler.ini` once so each game keeps
+its own edits.
+
+### Injection
+
+`veneer run <game> --inject <dll>` starts `veneer-inject.exe` in place of the
+game. Proton or Wine runs it; it reads the game from `VENEER_GAME_EXE` and
+`VENEER_GAME_ARGS`, and the DLLs from `VENEER_INJECT_DLLS` (Windows paths on
+`Z:`), because environment variables cross Wine unmangled. It creates the
+game suspended, loads each DLL with a remote `LoadLibraryW`, and resumes it.
+
+### Anti-cheat
+
+The overlay and injection refuse any game with EasyAntiCheat or BattlEye
+files in its install or one directory down.
+
+## Compatibility checks
+
+| Probe | Source |
+| --- | --- |
+| Kernel | `uname` |
+| GPU vendor and kernel driver | `/sys/class/drm/card*/device/{vendor,driver}` |
+| Vulkan devices, driver name and version (Mesa or NVIDIA) | a Vulkan 1.1 instance through `libvulkan.so.1`, `VkPhysicalDeviceDriverProperties` |
+| ROCm | `/opt/rocm`, `/opt/rocm/.info/version` |
+| User namespaces | `kernel.unprivileged_userns_clone`, `user.max_user_namespaces`, `kernel.apparmor_restrict_unprivileged_userns` |
+| gamescope | `gamescope --help` |
+| Display | `/sys/class/drm/*/modes` |
+
+`data/compat.tsv` holds the rules: feature, check, operator, value,
+severity, message, source URL. A test refuses a row without a source.
+`rules.evaluate` keeps the rules for the features a launch uses and sorts
+them worst first. `veneer doctor` prints every probe and every rule that
+fires; `veneer run` and the window refuse to launch on an error unless the
+player passes `--force`.
+
+## The window
+
+**Stack:** [dvui](https://github.com/david-vanderson/dvui), pinned in
+`build.zig.zon`, on its `sdl3gpu` backend: SDL3, built from source, renders
+through SDL's GPU API (Vulkan on Linux). FreeType draws text; `stb_image`
+decodes cover art.
+
+**Wayland first.** Veneer sets `SDL_HINT_VIDEO_DRIVER` to `wayland,x11`
+before SDL starts, so it runs natively on Wayland and uses X11 only when no
+Wayland compositor answers.
+
+**Fast:**
+
+- The loop sleeps in `waitEventTimeout` and draws only when an event,
+  animation or worker asks for a frame, so an idle window costs no CPU.
+- The window opens on the cached library and cover art. A worker thread
+  rescans Steam, reads the art, finds Proton builds and probes the system,
+  then swaps the result in.
+- Launches run on worker threads and report back with toasts. Closing the
+  window waits for the workers.
+
+**Pages:** a grid of cards (cover art or a named placeholder) with search,
+Add game and Rescan; and a game page with Play, the compatibility verdicts,
+Runner, Display, Upscaling, render scale, HDR, and a collapsed Advanced
+section (environment, game arguments, gamescope arguments). Choices save as
+they change.
+
+**Known limits of dvui:** text is laid out one glyph per code point, so
+complex scripts (Arabic, Hebrew, ligatures) do not render correctly.

@@ -1,0 +1,6 @@
+# feature	check	op	value	severity	message	source
+overlay	kernel	<	5.11	error	Unprivileged overlay mounts need Linux 5.11 or later, so files cannot be layered into the game directory.	https://kernelnewbies.org/Linux_5.11
+overlay	userns	==	no	error	Unprivileged user namespaces are disabled, so files cannot be layered into the game directory. Enable them (sysctl kernel.unprivileged_userns_clone=1, or the AppArmor policy on Ubuntu).	https://man7.org/linux/man-pages/man7/user_namespaces.7.html
+gamescope	gamescope	==	no	error	gamescope is not installed or not on PATH. Install it with your package manager, or choose the normal display.	https://github.com/ValveSoftware/gamescope
+hdr	gamescope_hdr	==	no	warn	This gamescope build has no --hdr-enabled flag; the game runs in SDR.	https://github.com/ValveSoftware/gamescope
+any	vulkan	==	no	error	No Vulkan driver answered. Proton translates DirectX to Vulkan, so Windows games will not start. Install your GPU's Vulkan driver (vulkan-radeon, vulkan-intel or nvidia-utils on Arch).	https://github.com/ValveSoftware/Proton/wiki/Requirements

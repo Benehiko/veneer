@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Veneer
+GenericName=Game Launcher
+Comment=Run Steam and Windows games with Proton, gamescope and OptiScaler, without touching game files
+Exec=veneer
+Icon=applications-games
+Terminal=false
+Categories=Game;
+Keywords=steam;proton;wine;gamescope;optiscaler;
+StartupWMClass=Veneer
