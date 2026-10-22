@@ -2,7 +2,9 @@ const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const Environ = std.process.Environ;
-const Game = @import("../library/game.zig").Game;
+const game_mod = @import("../library/game.zig");
+const Game = game_mod.Game;
+const Platform = game_mod.Platform;
 const steam = @import("../library/steam.zig");
 const proton = @import("../runner/proton.zig");
 const paths = @import("../paths.zig");
@@ -16,6 +18,7 @@ const inject_env = @import("../inject/env.zig");
 const optiscaler = @import("../hooks/optiscaler.zig");
 const settings_mod = @import("../config/settings.zig");
 const steam_overlay = @import("steam_overlay.zig");
+const translators = @import("../runner/translators.zig");
 
 pub const Error = error{
     NoExecutable,
@@ -103,6 +106,14 @@ pub fn runnerKind(runner: []const u8) RunnerKind {
     return .{ .named = runner };
 }
 
+pub fn runsNatively(kind: RunnerKind, platform: Platform) bool {
+    return switch (kind) {
+        .native => true,
+        .auto => platform == .linux,
+        .wine, .named => false,
+    };
+}
+
 pub fn compose(
     arena: Allocator,
     io: Io,
@@ -117,19 +128,20 @@ pub fn compose(
 
     var runner: plan.Runner = undefined;
     var runner_name: []const u8 = undefined;
-    const native = switch (kind) {
-        .native => true,
-        .auto => game.platform == .linux,
-        .wine, .named => false,
-    };
-    if (native) {
+    var native_dlls: []const []const u8 = &.{};
+    if (runsNatively(kind, game.platform)) {
         if (game.platform == .windows) return error.NativeGameOnWine;
         runner = .{ .native = .{ .runtime = try steamRuntime(arena, io, game) } };
         runner_name = "native";
     } else switch (kind) {
         .wine => |binary| {
-            runner = .{ .wine = .{ .binary = binary, .prefix = try ownPrefix(arena, io, env, game, over.dry_run) } };
+            const prefix = try ownPrefix(arena, io, env, game, over.dry_run);
+            runner = .{ .wine = .{ .binary = binary, .prefix = prefix } };
             runner_name = binary;
+            native_dlls = translators.setUp(arena, io, env, binary, prefix, over.dry_run) catch |err| blk: {
+                std.log.warn("DirectX games may fall back to WineD3D: {s}", .{translators.explain(err) orelse @errorName(err)});
+                break :blk &.{};
+            };
         },
         else => {
             const locations = try steam.locate(arena, io, home);
@@ -193,7 +205,10 @@ pub fn compose(
     try args.appendSlice(arena, over.extra_args);
 
     var vars: std.ArrayList(plan.EnvVar) = .empty;
-    if (effective.optiscaler_dir != null) try vars.append(arena, .{ .name = "WINEDLLOVERRIDES", .value = optiscaler.dll_override });
+    var overridden: std.ArrayList([]const u8) = .empty;
+    try overridden.appendSlice(arena, native_dlls);
+    if (effective.optiscaler_dir != null) try overridden.append(arena, optiscaler.proxy_dll);
+    if (try translators.nativeOverride(arena, overridden.items)) |value| try vars.append(arena, .{ .name = "WINEDLLOVERRIDES", .value = value });
     if (game.steam) |s| try vars.appendSlice(arena, try steam_overlay.vars(arena, io, s.root, s.app_id, env.get("LD_PRELOAD")));
     for (choices.env) |assignment| {
         const v = plan.parseEnvAssignment(assignment) orelse {

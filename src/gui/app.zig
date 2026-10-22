@@ -25,6 +25,7 @@ const steam_client = @import("../launch/steam_client.zig");
 const opti_releases = @import("../optiscaler/releases.zig");
 const opti_install = @import("../optiscaler/install.zig");
 const ge_proton = @import("../runner/ge_proton.zig");
+const steam_install = @import("../runner/steam_install.zig");
 const theme = @import("theme.zig");
 
 const card_w = 160;
@@ -88,7 +89,19 @@ const App = struct {
     scanning: std.atomic.Value(bool) = .init(false),
     installing: std.atomic.Value(bool) = .init(false),
     installing_proton: std.atomic.Value(bool) = .init(false),
+    following_steam: std.atomic.Value(bool) = .init(false),
+    steam_progress: ?steam_install.Progress = null,
     threads: std.ArrayList(std.Thread) = .empty,
+
+    fn startSteamProtonInstall(app: *App) void {
+        if (app.following_steam.swap(true, .acq_rel)) return;
+        app.steam_progress = null;
+        const t = std.Thread.spawn(.{}, steamInstallWorker, .{app}) catch {
+            app.following_steam.store(false, .release);
+            return;
+        };
+        app.threads.append(app.gpa, t) catch t.detach();
+    }
 
     fn startProtonDownload(app: *App) void {
         if (app.installing_proton.swap(true, .acq_rel)) return;
@@ -315,7 +328,7 @@ const App = struct {
         dvui.labelNoFmt(@src(), game.name, .{}, .{ .font = .theme(.title), .max_size_content = .width(panel_w) });
         dvui.label(@src(), "{s} game, from {s}", .{ if (game.platform == .windows) "Windows" else "Linux", if (game.source == .steam) "Steam" else "your library" }, .{});
 
-        const found: []const rules.Verdict = if (lib.probed) launcher.checks(frame_arena, lib.facts, lib.table, sel.choices, .{}) catch &.{} else &.{};
+        const found: []const rules.Verdict = if (lib.probed) launcher.checks(frame_arena, lib.facts, lib.table, sel.choices, .{}, game.platform) catch &.{} else &.{};
         const blocked = rules.worst(found) == .@"error";
 
         if (dvui.button(@src(), if (blocked) "Cannot play (see below)" else "Play", .{}, .{
@@ -357,10 +370,15 @@ const App = struct {
         }
         if (game.platform == .windows and lib.probed and lib.tools.len == 0) {
             dvui.labelNoFmt(@src(), "No Proton is installed.", .{}, .{ .margin = .{ .y = 4 } });
-            if (dvui.button(@src(), "Install Proton Experimental", .{}, .{ .expand = .horizontal })) {
-                steam_client.requestInstall(app.io, steam_client.proton_experimental_app_id) catch {};
-                dvui.toast(@src(), .{ .message = "Steam is installing Proton Experimental. Press Rescan when it finishes." });
-            }
+            const following = app.following_steam.load(.acquire);
+            var buf: [128]u8 = undefined;
+            const install_label = if (!following)
+                "Install Proton Experimental"
+            else if (app.steam_progress) |p|
+                std.fmt.allocPrint(frame_arena, "Steam: {s}", .{steam_install.describe(&buf, p)}) catch "Steam is installing Proton…"
+            else
+                "Waiting for Steam…";
+            if (dvui.button(@src(), install_label, .{}, .{ .expand = .horizontal }) and !following) app.startSteamProtonInstall();
         }
 
         dvui.labelNoFmt(@src(), "Display", .{}, .{ .margin = .{ .y = 8 } });
@@ -536,6 +554,32 @@ fn protonWorker(app: *App) void {
     };
     app.post("{s} is installed; choose it under Runner (restart Steam to see it there too)", .{done.tag});
     app.startScan();
+}
+
+fn steamInstallWorker(app: *App) void {
+    defer app.following_steam.store(false, .release);
+    const home = app.env.get("HOME") orelse return;
+    steam_client.requestInstall(app.io, steam_client.proton_experimental_app_id) catch {
+        return app.post("Could not start Steam to install Proton", .{});
+    };
+    const outcome = steam_install.follow(app.gpa, app.io, home, steam_client.proton_experimental_app_id, app, reportSteamProgress) catch return;
+    switch (outcome) {
+        .installed => {
+            app.post("Proton Experimental is installed", .{});
+            app.startScan();
+        },
+        .never_started => app.post("Steam has not started installing Proton; open Steam's Downloads page", .{}),
+        .stopped => {},
+    }
+}
+
+fn reportSteamProgress(app: *App, now: ?steam_install.Progress) bool {
+    app.mutex.lockUncancelable(app.io);
+    defer app.mutex.unlock(app.io);
+    if (app.closing) return false;
+    if (now) |p| app.steam_progress = p;
+    dvui.refresh(app.win, @src(), null);
+    return true;
 }
 
 fn installWorker(app: *App) void {

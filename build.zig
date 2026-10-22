@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) void {
     });
     root.addAnonymousImport("compat_rules", .{ .root_source_file = b.path("data/compat.tsv") });
     root.addAnonymousImport("optiscaler_releases", .{ .root_source_file = b.path("data/optiscaler.tsv") });
+    root.addAnonymousImport("translator_releases", .{ .root_source_file = b.path("data/translators.tsv") });
 
     const dvui_dep = b.dependency("dvui", .{ .target = target, .optimize = optimize, .backend = .sdl3gpu });
     root.addImport("dvui", dvui_dep.module("dvui_sdl3gpu"));
@@ -41,6 +42,8 @@ pub fn build(b: *std.Build) void {
     root.addAnonymousImport("inter_semibold", .{ .root_source_file = inter.path("extras/ttf/Inter-SemiBold.ttf") });
     b.getInstallStep().dependOn(&b.addInstallFile(inter.path("LICENSE.txt"), "share/licenses/veneer/Inter-OFL.txt").step);
     b.getInstallStep().dependOn(&b.addInstallFile(b.path("LICENSE"), "share/licenses/veneer/LICENSE").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(b.path("data/veneer.desktop"), "share/applications/veneer.desktop").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(b.path("data/veneer.svg"), "share/icons/hicolor/scalable/apps/veneer.svg").step);
 
     const exe = b.addExecutable(.{ .name = "veneer", .root_module = root });
     b.installArtifact(exe);

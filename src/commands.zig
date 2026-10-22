@@ -19,6 +19,7 @@ const optiscaler = @import("hooks/optiscaler.zig");
 const opti_releases = @import("optiscaler/releases.zig");
 const opti_install = @import("optiscaler/install.zig");
 const ge_proton = @import("runner/ge_proton.zig");
+const steam_install = @import("runner/steam_install.zig");
 const facts_mod = @import("compat/facts.zig");
 const rules = @import("compat/rules.zig");
 const Game = library.Game;
@@ -178,7 +179,7 @@ pub fn doctor(ctx: Ctx) !void {
     try out.print("userns     {s}\n", .{if (f.userns) "allowed" else "restricted"});
     for (f.gpus) |g| try out.print("gpu        {s} ({s})\n", .{ @tagName(g.vendor), g.kernel_driver });
     if (f.vk.len == 0) try out.print("vulkan     no devices: {s}\n", .{f.vk_error orelse "the driver reported none (is /dev/dri accessible?)"});
-    for (f.vk) |d| try out.print("vulkan     {s}: {s} {s}\n", .{ d.name, d.driver_name, d.driver_info });
+    for (f.vk) |d| try out.print("vulkan     {s}: {s} {s}, Vulkan {f}\n", .{ d.name, d.driver_name, d.driver_info, facts_mod.apiVersion(d.api_version) });
     if (f.rocm) |r| {
         try out.print("rocm       {f}\n", .{r});
     } else try out.print("rocm       {s}\n", .{if (f.rocm_present) "installed, version unknown" else "not installed"});
@@ -234,7 +235,7 @@ pub fn run(ctx: Ctx, args: []const []const u8) !void {
     }
     over.inject_dlls = dlls.items;
     const t = try target(ctx, query orelse return fail("run: name a game", .{}), assignments.items);
-    const checks = try verdicts(ctx, try facts_mod.probe(ctx.arena, ctx.io), launcher.featuresFor(t.choices, over));
+    const checks = try verdicts(ctx, try facts_mod.probe(ctx.arena, ctx.io), launcher.featuresFor(t.choices, over, t.game.platform));
     for (checks) |v| switch (v.severity) {
         .@"error" => std.log.err("{s}: {s}", .{ @tagName(v.feature), v.message }),
         .warn => std.log.warn("{s}: {s}", .{ @tagName(v.feature), v.message }),
@@ -320,9 +321,36 @@ pub fn installProton(ctx: Ctx, args: []const []const u8) !void {
         return;
     }
     if (args.len > 0) return fail("install-proton: say nothing for Proton Experimental through Steam, or `ge` for GE-Proton", .{});
+    const home = ctx.env.get("HOME") orelse return fail("HOME is not set", .{});
     steam_client.requestInstall(ctx.io, steam_client.proton_experimental_app_id) catch return fail("could not start Steam to install Proton", .{});
-    try ctx.out.writeAll("Steam is installing Proton Experimental; it appears in `veneer runners` when Steam finishes\n");
+    try ctx.out.writeAll("asked Steam to install Proton Experimental; following the install (Ctrl-C stops following, not the install)\n");
+    try ctx.out.flush();
+    var printer: ProgressPrinter = .{ .out = ctx.out };
+    const outcome = try steam_install.follow(ctx.gpa, ctx.io, home, steam_client.proton_experimental_app_id, &printer, ProgressPrinter.report);
+    switch (outcome) {
+        .installed => try ctx.out.writeAll("Proton Experimental is installed; `veneer runners` lists it\n"),
+        .never_started => return fail("Steam has not started the install; open Steam's Downloads page", .{}),
+        .stopped => {},
+    }
 }
+
+const ProgressPrinter = struct {
+    out: *Io.Writer,
+    phase: ?steam_install.Phase = null,
+    percent: ?u8 = null,
+
+    fn report(p: *ProgressPrinter, now: ?steam_install.Progress) bool {
+        const prog = now orelse return true;
+        const pct = prog.percent();
+        if (p.phase == prog.phase and p.percent == pct) return true;
+        p.phase = prog.phase;
+        p.percent = pct;
+        var buf: [128]u8 = undefined;
+        p.out.print("  {s}\n", .{steam_install.describe(&buf, prog)}) catch {};
+        p.out.flush() catch {};
+        return true;
+    }
+};
 
 pub fn pick(games: []const Game, query: []const u8) !Game {
     return switch (library.find(games, query)) {

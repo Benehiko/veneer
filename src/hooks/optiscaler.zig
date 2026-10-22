@@ -5,7 +5,6 @@ const Allocator = std.mem.Allocator;
 pub const source_dll = "OptiScaler.dll";
 pub const proxy_dll = "dxgi.dll";
 pub const ini_name = "OptiScaler.ini";
-pub const dll_override = "dxgi=n,b";
 
 pub fn looksLikeRelease(io: Io, dir: []const u8) bool {
     var d = Io.Dir.cwd().openDir(io, dir, .{}) catch return false;

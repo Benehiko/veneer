@@ -54,11 +54,11 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
 | M2 Launch | yes | dry runs only |
 | M3 gamescope | yes | dry runs only |
 | M4 Window | yes | compiles; not yet opened on a desktop |
-| M5 Compatibility checks | engine and probes | needs sourced OptiScaler, Mesa and ROCm rules |
+| M5 Compatibility checks | yes, with sourced Vulkan, Mesa, NVIDIA and OptiScaler rules | unit tests; no ROCm rule, for want of a source |
 | M6 Hooks | yes | overlay blocked by the build sandbox; not yet run on a desktop |
 | M7 OptiScaler | yes | download, verify, unpack and staging checked with v0.9.4; not yet in a game |
-| M8 Runners | yes | GE-Proton download checked end to end; Steam's Proton install and custom Wine not yet run |
-| M9 Release | `.desktop`, `make install`, licenses installed | packaging still open |
+| M8 Runners | yes | GE-Proton download checked end to end; install progress, DXVK and VKD3D-Proton unit-tested only |
+| M9 Release | `.desktop`, icon, `make install`, `make release`, Nix package, user guide | the Nix deps hash is unset; `make release` not yet run |
 
 ## Done
 
@@ -72,18 +72,26 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
   `gamescope --help`, output size from DRM.
 - **Steam overlay:** the variables Steam sets, for Steam games, joined to
   any existing `LD_PRELOAD`.
-- **Compatibility:** kernel, GPU, Vulkan driver and Mesa, ROCm, user
-  namespaces, gamescope and display probes; sourced rules; `veneer doctor`;
-  launch refused on an error unless forced.
+- **Compatibility:** kernel, GPU, Vulkan driver, its Vulkan version and
+  Mesa, ROCm, user namespaces, gamescope and display probes; sourced rules
+  for Vulkan 1.3 (DXVK), Mesa 22.0 and NVIDIA 535 (VKD3D-Proton), and
+  OptiScaler's FSR 4 on non-AMD GPUs; `veneer doctor`; launch refused on an
+  error unless forced.
 - **Hooks:** environment; the private overlay mount, with an error per
   refused step; `veneer-inject.exe`; anti-cheat refusal.
 - **OptiScaler:** pinned releases with SHA-256; download, list-check,
   unpack with the host's tool, symlink check; staging as `dxgi.dll` with
   `dxgi=n,b`, beside the exe or the Unreal `-Shipping.exe`; per-game
   `OptiScaler.ini`; [guide](guides/optiscaler.md).
-- **Runners:** Proton Experimental through `steam://install`; GE-Proton
-  download, digest check, and native gzip and tar unpacking that refuses
-  links leaving the build; a Wine binary per game with its own prefix.
+- **Runners:** Proton Experimental through `steam://install`, with its
+  progress followed through Steam's app manifest; GE-Proton download, digest
+  check, and native gzip, zstd and tar unpacking that refuses links leaving
+  the build; a Wine binary per game with its own prefix, given pinned DXVK
+  and VKD3D-Proton before its first launch.
+- **Release:** `.desktop` entry and icon installed by `zig build`;
+  `make release` with reproducible tarballs, `SHA256SUMS` and gpg
+  signatures; a Nix package that fetches its Zig dependencies ahead of the
+  build; a [user guide](guides/using-veneer.md).
 - **Window:** dvui with Inter; library grid with cover art and search; game
   page with Runner, Display, Upscaling, render scale, HDR and Advanced;
   verdicts beside Play; Add game, Rescan, Download OptiScaler, Download
@@ -112,17 +120,20 @@ Each needs a display, a GPU, or mount rights the build sandbox lacks.
       Proton; run a game on a GE-Proton build Veneer downloaded; run a game
       on a custom Wine binary.
 
+- [ ] Installing Proton Experimental from the window shows Steam's progress
+      on the button and rescans when Steam finishes.
+- [ ] A DirectX 11 and a DirectX 12 game run on a custom Wine binary through
+      DXVK and VKD3D-Proton (`DXVK_HUD=1` shows), and the VKD3D-Proton
+      `.tar.zst` unpacks.
+
 ### Build
 
-- [ ] **Compatibility rules (M5):** OptiScaler, Mesa and ROCm requirements in
-      `data/compat.tsv`, each with a source.
-- [ ] **Steam Proton install progress (M8):** follow the install instead of
-      asking the player to press Rescan.
-- [ ] **Custom Wine prefixes (M8):** install DXVK and VKD3D-Proton into
-      prefixes Veneer creates, so DirectX games do not fall back to WineD3D.
-- [ ] **Release (M9):** `make release` with signed tarballs and checksums;
-      an icon; a Nix package (dvui, SDL3 and Inter fetched ahead of the
-      build); a user guide.
+- [ ] **Nix package (M9):** set `depsHash` in `flake.nix` from the first
+      `nix build`, then check the package opens the window.
+- [ ] **First release (M9):** tag a version and run `make release` with the
+      signing key.
+- [ ] **ROCm rules (M5):** add one when a sourced ROCm requirement for
+      games turns up; none was found.
 
 ## Open questions
 

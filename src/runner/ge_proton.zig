@@ -84,17 +84,33 @@ pub fn throughLink(name: []const u8, links: []const []const u8) bool {
     return false;
 }
 
-pub fn extract(arena: Allocator, io: Io, archive: []const u8, dest: Io.Dir) !void {
+pub const Compression = enum { gzip, zstd };
+
+pub const zstd_window_len = 1 << 25;
+
+pub fn extract(arena: Allocator, io: Io, archive: []const u8, compression: Compression, dest: Io.Dir) !void {
     const file = try Io.Dir.cwd().openFile(io, archive, .{});
     defer file.close(io);
     var file_buf: [64 * 1024]u8 = undefined;
     var file_reader = file.readerStreaming(io, &file_buf);
-    var window: [std.compress.flate.max_window_len]u8 = undefined;
-    var gz: std.compress.flate.Decompress = .init(&file_reader.interface, .gzip, &window);
+    switch (compression) {
+        .gzip => {
+            var window: [std.compress.flate.max_window_len]u8 = undefined;
+            var gz: std.compress.flate.Decompress = .init(&file_reader.interface, .gzip, &window);
+            try extractTar(arena, io, &gz.reader, dest);
+        },
+        .zstd => {
+            const window = try arena.alloc(u8, zstd_window_len + std.compress.zstd.block_size_max);
+            var zs: std.compress.zstd.Decompress = .init(&file_reader.interface, window, .{ .window_len = zstd_window_len });
+            try extractTar(arena, io, &zs.reader, dest);
+        },
+    }
+}
 
+pub fn extractTar(arena: Allocator, io: Io, reader: *Io.Reader, dest: Io.Dir) !void {
     var name_buf: [std.fs.max_path_bytes]u8 = undefined;
     var link_buf: [std.fs.max_path_bytes]u8 = undefined;
-    var it: std.tar.Iterator = .init(&gz.reader, .{ .file_name_buffer = &name_buf, .link_name_buffer = &link_buf });
+    var it: std.tar.Iterator = .init(reader, .{ .file_name_buffer = &name_buf, .link_name_buffer = &link_buf });
     var links: std.ArrayList([]const u8) = .empty;
     var write_buf: [64 * 1024]u8 = undefined;
 
@@ -159,7 +175,7 @@ pub fn install(arena: Allocator, gpa: Allocator, io: Io, steam_root: []const u8)
     {
         var dest = try Io.Dir.cwd().openDir(io, tmp, .{});
         defer dest.close(io);
-        try extract(arena, io, archive, dest);
+        try extract(arena, io, archive, .gzip, dest);
     }
     const name = try buildDir(arena, io, tmp);
     const installed = try std.fs.path.join(arena, &.{ tools, name });
@@ -202,7 +218,7 @@ fn buildDir(arena: Allocator, io: Io, root: []const u8) ![]const u8 {
     return error.NotAProtonBuild;
 }
 
-fn download(gpa: Allocator, io: Io, url: []const u8, dest: []const u8, want: [32]u8) !void {
+pub fn download(gpa: Allocator, io: Io, url: []const u8, dest: []const u8, want: [32]u8) !void {
     {
         var client: std.http.Client = .{ .allocator = gpa, .io = io };
         defer client.deinit();

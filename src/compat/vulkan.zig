@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 pub const Device = struct {
+    api_version: u32 = 0,
     vendor_id: u32,
     name: []const u8,
     driver_name: []const u8,
@@ -49,6 +50,7 @@ const Properties2 = extern struct {
     properties: [2048]u8 align(8) = @splat(0),
 };
 
+const api_version_offset = 0;
 const vendor_id_offset = 8;
 const device_type_offset = 16;
 const device_name_offset = 20;
@@ -104,6 +106,7 @@ pub fn devices(arena: Allocator) Error![]const Device {
         var props: Properties2 = .{ .p_next = &driver };
         props2(h, &props);
         d.* = .{
+            .api_version = std.mem.readInt(u32, props.properties[api_version_offset..][0..4], .little),
             .vendor_id = std.mem.readInt(u32, props.properties[vendor_id_offset..][0..4], .little),
             .discrete = std.mem.readInt(u32, props.properties[device_type_offset..][0..4], .little) == discrete_gpu,
             .name = try arena.dupe(u8, std.mem.sliceTo(props.properties[device_name_offset..][0..256], 0)),

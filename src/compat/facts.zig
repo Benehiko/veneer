@@ -66,15 +66,32 @@ pub const Facts = struct {
     userns: bool = false,
     gamescope: gamescope.Caps = .{},
 
-    pub fn primaryVendor(self: Facts) ?Vendor {
+    pub fn primaryDevice(self: Facts) ?vulkan.Device {
         for (self.vk) |d| {
-            if (d.discrete) return vendorFromId(d.vendor_id);
+            if (d.discrete) return d;
         }
-        if (self.vk.len > 0) return vendorFromId(self.vk[0].vendor_id);
+        return if (self.vk.len > 0) self.vk[0] else null;
+    }
+
+    pub fn primaryVendor(self: Facts) ?Vendor {
+        if (self.primaryDevice()) |d| return vendorFromId(d.vendor_id);
         if (self.gpus.len > 0) return self.gpus[0].vendor;
         return null;
     }
+
+    pub fn vulkanApi(self: Facts) ?Version {
+        const d = self.primaryDevice() orelse return null;
+        return if (d.api_version == 0) null else apiVersion(d.api_version);
+    }
 };
+
+pub fn apiVersion(packed_version: u32) Version {
+    return .{
+        .major = (packed_version >> 22) & 0x7f,
+        .minor = (packed_version >> 12) & 0x3ff,
+        .patch = packed_version & 0xfff,
+    };
+}
 
 pub fn mesaFrom(devices: []const vulkan.Device) ?Version {
     for (devices) |d| {
@@ -199,4 +216,16 @@ test "Mesa and NVIDIA versions come from the Vulkan driver info" {
     try testing.expectEqual(@as(u32, 580), nvidiaFrom(&devs).?.major);
     const facts: Facts = .{ .vk = &devs };
     try testing.expectEqual(Vendor.nvidia, facts.primaryVendor().?);
+}
+
+test "the Vulkan version is the discrete GPU's, unpacked from Vulkan's encoding" {
+    const vk_1_3_280 = (1 << 22) | (3 << 12) | 280;
+    const vk_1_4_309 = (1 << 22) | (4 << 12) | 309;
+    const devs = [_]vulkan.Device{
+        .{ .api_version = vk_1_4_309, .vendor_id = 0x8086, .name = "iGPU", .driver_name = "anv", .driver_info = "Mesa 25.2.4", .discrete = false },
+        .{ .api_version = vk_1_3_280, .vendor_id = 0x1002, .name = "dGPU", .driver_name = "radv", .driver_info = "Mesa 25.2.4", .discrete = true },
+    };
+    const facts: Facts = .{ .vk = &devs };
+    try testing.expectEqual(Version{ .major = 1, .minor = 3, .patch = 280 }, facts.vulkanApi().?);
+    try testing.expect((Facts{}).vulkanApi() == null);
 }

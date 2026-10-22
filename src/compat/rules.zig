@@ -6,7 +6,7 @@ const Version = facts_mod.Version;
 
 pub const builtin_table = @embedFile("compat_rules");
 
-pub const Feature = enum { any, overlay, inject, gamescope, hdr, optiscaler };
+pub const Feature = enum { any, wine, overlay, inject, gamescope, hdr, optiscaler };
 
 pub const Features = std.EnumSet(Feature);
 
@@ -20,7 +20,7 @@ pub const Severity = enum {
     }
 };
 
-pub const Check = enum { kernel, mesa, nvidia, rocm, userns, gamescope, gamescope_hdr, vulkan, gpu };
+pub const Check = enum { kernel, mesa, nvidia, rocm, vulkan_api, userns, gamescope, gamescope_hdr, vulkan, gpu };
 
 pub const Op = enum {
     lt,
@@ -94,7 +94,7 @@ pub fn parse(arena: Allocator, text: []const u8) ParseError![]const Rule {
 
 fn valueFits(r: Rule) bool {
     return switch (r.check) {
-        .kernel, .mesa, .nvidia, .rocm => Version.parse(r.value) != null,
+        .kernel, .mesa, .nvidia, .rocm, .vulkan_api => Version.parse(r.value) != null,
         .userns, .gamescope, .gamescope_hdr, .vulkan => (std.mem.eql(u8, r.value, "yes") or std.mem.eql(u8, r.value, "no")) and (r.op == .eq or r.op == .ne),
         .gpu => std.meta.stringToEnum(facts_mod.Vendor, r.value) != null and (r.op == .eq or r.op == .ne),
     };
@@ -102,12 +102,13 @@ fn valueFits(r: Rule) bool {
 
 fn fires(r: Rule, f: Facts) bool {
     switch (r.check) {
-        .kernel, .mesa, .nvidia, .rocm => {
+        .kernel, .mesa, .nvidia, .rocm, .vulkan_api => {
             const have = switch (r.check) {
                 .kernel => f.kernel,
                 .mesa => f.mesa,
                 .nvidia => f.nvidia,
                 .rocm => f.rocm,
+                .vulkan_api => f.vulkanApi(),
                 else => unreachable,
             } orelse return false;
             return r.op.holds(have.order(Version.parse(r.value).?));
@@ -195,4 +196,20 @@ test "a rule fires only for the features in play, worst first, and never on unkn
     const mesa = try evaluate(a, rules, new, .initOne(.overlay));
     try testing.expectEqual(@as(usize, 1), mesa.len);
     try testing.expectEqualStrings("old mesa", mesa[0].message);
+}
+
+test "the Vulkan version check compares the primary device's version" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const rules = try parse(a, "wine\tvulkan_api\t<\t1.3\terror\told vulkan\thttps://a\n");
+    const vulkan = @import("vulkan.zig");
+    const v1_2: vulkan.Device = .{ .api_version = (1 << 22) | (2 << 12), .vendor_id = 0x1002, .name = "", .driver_name = "", .driver_info = "", .discrete = true };
+    var v1_3 = v1_2;
+    v1_3.api_version = (1 << 22) | (3 << 12) | 1;
+
+    try testing.expectEqual(@as(usize, 1), (try evaluate(a, rules, .{ .vk = &.{v1_2} }, .initOne(.wine))).len);
+    try testing.expectEqual(@as(usize, 0), (try evaluate(a, rules, .{ .vk = &.{v1_2} }, .empty)).len);
+    try testing.expectEqual(@as(usize, 0), (try evaluate(a, rules, .{ .vk = &.{v1_3} }, .initOne(.wine))).len);
+    try testing.expectEqual(@as(usize, 0), (try evaluate(a, rules, .{}, .initOne(.wine))).len);
 }

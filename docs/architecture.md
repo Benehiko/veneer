@@ -45,7 +45,9 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/library/manual.zig` | games the player adds, in `library.zon` |
 | `src/library/cache.zig` | the last scan, so the window opens at once |
 | `src/runner/proton.zig` | Proton discovery and Steam's tool aliases |
-| `src/runner/ge_proton.zig` | GE-Proton download, digest check and safe unpacking |
+| `src/runner/ge_proton.zig` | GE-Proton download, digest check and safe unpacking of `.tar.gz` and `.tar.zst` |
+| `src/runner/steam_install.zig` | following an install Steam runs, through its app manifest |
+| `src/runner/translators.zig` | DXVK and VKD3D-Proton in Veneer's own Wine prefixes |
 | `src/launch/steam_overlay.zig` | the variables that load Steam's overlay |
 | `src/gui/theme.zig` | Adwaita with Inter |
 | `src/config/` | per-game choices, global settings, the ZON file helper |
@@ -59,6 +61,8 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/gui/` | the dvui window (`app.zig`) and its pure model (`model.zig`) |
 | `data/compat.tsv` | compatibility rules, each with its source |
 | `data/optiscaler.tsv` | OptiScaler releases Veneer will install, with their SHA-256 |
+| `data/translators.tsv` | DXVK and VKD3D-Proton releases Veneer will install, with their SHA-256 |
+| `data/veneer.desktop`, `data/veneer.svg` | the desktop entry and icon |
 
 ## Where Veneer keeps its files
 
@@ -70,6 +74,7 @@ Nothing goes in a game's install.
 | `$XDG_CONFIG_HOME/veneer/library.zon` | games added by hand |
 | `$XDG_CONFIG_HOME/veneer/games/<id>.zon` | each game's choices |
 | `$XDG_DATA_HOME/veneer/prefixes/<id>` | Wine prefixes for games Steam does not own |
+| `$XDG_DATA_HOME/veneer/translators/<name>-<tag>` | unpacked DXVK and VKD3D-Proton releases |
 | `$XDG_DATA_HOME/veneer/overlay/<id>/{upper,work}` | each game's overlay layer |
 | `$XDG_CACHE_HOME/veneer/library.zon` | the last library scan |
 | `$XDG_STATE_HOME/veneer/logs/<id>.log` | the last launch, and `.prev` before it |
@@ -113,7 +118,37 @@ already has), `SteamOverlayGameId`, and
 `$XDG_DATA_HOME/veneer/prefixes`. Steam games need the client for their DRM,
 so Veneer starts `steam -silent` first if `~/.steam/steam.pid` names no
 running Steam. `veneer install-proton` and the window's button send
-`steam://install/1493710` (Proton Experimental) to Steam.
+`steam://install/1493710` (Proton Experimental) to Steam, then follow the
+install every two seconds through `appmanifest_1493710.acf` in any
+library: `BytesDownloaded` of `BytesToDownload` while it downloads,
+`BytesStaged` of `BytesToStage` while it installs, and paused while
+`StateFlags` has the update-paused bit (512). The install is done when
+`StateFlags` has the installed bit (4) and none of update-required (2),
+update-running (256), update-paused (512) or update-started (1024). The
+window then rescans; if no manifest appears within five minutes, Veneer
+says so and stops following.
+
+### Custom Wine
+
+A game whose runner is a path to `wine` gets a prefix under
+`$XDG_DATA_HOME/veneer/prefixes`. Plain Wine draws DirectX through WineD3D,
+so before the first launch Veneer:
+
+1. downloads the DXVK and VKD3D-Proton releases pinned in
+   `data/translators.tsv`, checks each against its SHA-256, and unpacks it
+   (`std.compress.flate` or `std.compress.zstd`, then `std.tar`, with the
+   same refusals as GE-Proton) into `$XDG_DATA_HOME/veneer/translators`;
+2. creates the prefix with `wine wineboot --init`, with Mono and Gecko
+   turned off (`WINEDLLOVERRIDES=mscoree,mshtml=`);
+3. copies the 64-bit DLLs into `system32` and the 32-bit ones into
+   `syswow64`, or the 32-bit ones into `system32` in a 32-bit prefix;
+4. writes `.veneer-translators` in the prefix, naming the releases, so later
+   launches skip steps 2 and 3 until the pins change.
+
+Each launch then sets `WINEDLLOVERRIDES` to every copied DLL as native,
+then builtin (`d3d10core,d3d11,d3d12,d3d12core,d3d8,d3d9,dxgi=n,b`). If
+any step fails, Veneer warns and launches anyway. Proton needs none of
+this: it ships both.
 
 `veneer install-proton ge` and the Runner menu's **Download GE-Proton**
 ask GitHub's API for the latest GE-Proton release, pick the build for this
@@ -136,8 +171,10 @@ get `-U` or `-Y`, and `--hdr-enabled` is passed only when offered.
 
 ### Environment
 
-Variables only: the player's own (`env=` settings), and
-`WINEDLLOVERRIDES` for OptiScaler. The player's value wins.
+Variables only: the player's own (`env=` settings), and one
+`WINEDLLOVERRIDES` naming every DLL that must load native first:
+OptiScaler's `dxgi`, and DXVK's and VKD3D-Proton's in a custom Wine
+prefix. The player's value wins.
 
 ### Overlay
 
@@ -199,7 +236,7 @@ files in its install or one directory down.
 | --- | --- |
 | Kernel | `uname` |
 | GPU vendor and kernel driver | `/sys/class/drm/card*/device/{vendor,driver}` |
-| Vulkan devices, driver name and version (Mesa or NVIDIA) | a Vulkan 1.1 instance through `libvulkan.so.1`, `VkPhysicalDeviceDriverProperties` |
+| Vulkan devices, their Vulkan version, driver name and version (Mesa or NVIDIA) | a Vulkan 1.1 instance through `libvulkan.so.1`, `VkPhysicalDeviceProperties.apiVersion`, `VkPhysicalDeviceDriverProperties` |
 | ROCm | `/opt/rocm`, `/opt/rocm/.info/version` |
 | User namespaces | `kernel.unprivileged_userns_clone`, `user.max_user_namespaces`, `kernel.apparmor_restrict_unprivileged_userns` |
 | gamescope | `gamescope --help` |
@@ -208,7 +245,9 @@ files in its install or one directory down.
 `data/compat.tsv` holds the rules: feature, check, operator, value,
 severity, message, source URL. A test refuses a row without a source.
 `rules.evaluate` keeps the rules for the features a launch uses and sorts
-them worst first. `veneer doctor` prints every probe and every rule that
+them worst first. The `wine` feature is in use whenever the game runs
+through Proton or Wine; version checks on the Vulkan driver read the
+discrete GPU, else the first one. `veneer doctor` prints every probe and every rule that
 fires; `veneer run` and the window refuse to launch on an error unless the
 player passes `--force`.
 
@@ -243,3 +282,27 @@ they change.
 
 **Known limits of dvui:** text is laid out one glyph per code point, so
 complex scripts (Arabic, Hebrew, ligatures) do not render correctly.
+
+## Release
+
+`zig build install` puts in place everything a package needs: `bin/veneer`,
+`bin/veneer-inject.exe`, the desktop entry, the icon under
+`share/icons/hicolor/scalable/apps`, and the licenses under
+`share/licenses/veneer`.
+
+`make release` refuses a dirty tree, then for each of `RELEASE_TARGETS`
+(default `x86_64-linux-gnu`) builds with `-Doptimize=safe` and the version
+from `git describe`, and packs the install into
+`dist/veneer-<version>-<arch>-linux.tar.gz` with sorted names, owner 0 and
+the last commit's time, so the same commit gives the same bytes. It writes
+`dist/SHA256SUMS` and signs each tarball and the sums with
+`gpg --detach-sign --armor` (`GPG_KEY` picks the key).
+
+The flake's `packages.default` builds in two steps. `deps` is a
+fixed-output derivation that runs `zig build --fetch=all --pkg-dir $out`,
+fetching dvui, SDL3, Inter and the rest of `build.zig.zon` ahead of the
+build. The package then builds offline with `zig build --system <deps>`,
+and `autoPatchelfHook` adds the Vulkan loader, Wayland, libxkbcommon,
+libdecor and X11 libraries that SDL and Veneer open at run time. When
+`build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
+to `lib.fakeHash`, run `nix build`, and copy the hash Nix reports.

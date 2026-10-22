@@ -23,14 +23,15 @@ veneer set "Hell is Us" upscaling=optiscaler
 veneer doctor                            # what this system supports
 ```
 
-`veneer help` lists every command and setting.
+`veneer help` lists every command and setting. The
+[user guide](docs/guides/using-veneer.md) covers installing and playing.
 
 ## Why
 
 Getting gamescope and OptiScaler right through Steam's launch options is
 tedious. OptiScaler's usual install copies DLLs into the game directory,
 where a game update or a file check can break it, and whether it works at
-all depends on the kernel, Mesa and ROCm versions. Launchers that solve this
+all depends on the GPU and the kernel and driver versions. Launchers that solve this
 tend to bury the player in settings. Veneer detects what it can, warns about
 what will not work, and keeps the window small.
 
@@ -42,7 +43,9 @@ make hooks    # once per clone: zig fmt check and tests before each commit
 make build    # zig-out/bin/veneer
 make test     # unit tests
 make run      # build and run
-make install  # veneer and its desktop entry under ~/.local (PREFIX=...)
+make install  # veneer, its desktop entry and icon under ~/.local (PREFIX=...)
+make release  # signed tarballs and SHA256SUMS in dist/ (GPG_KEY=...)
+nix build     # the Nix package
 ```
 
 ## License
@@ -55,5 +58,6 @@ warranty.
 ## Docs
 
 - [docs/plan.md](docs/plan.md): goals, design decisions and milestones
-- [docs/architecture.md](docs/architecture.md): layout, hooks and the GUI stack
+- [docs/guides/using-veneer.md](docs/guides/using-veneer.md): installing and playing
+- [docs/architecture.md](docs/architecture.md): layout, hooks, the GUI stack and releases
 - [AGENTS.md](AGENTS.md): rules for contributors, human or agent

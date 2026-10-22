@@ -92,4 +92,6 @@ test {
     _ = @import("optiscaler/install.zig");
     _ = @import("launch/steam_overlay.zig");
     _ = @import("runner/ge_proton.zig");
+    _ = @import("runner/steam_install.zig");
+    _ = @import("runner/translators.zig");
 }

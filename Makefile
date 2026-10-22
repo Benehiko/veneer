@@ -1,4 +1,4 @@
-.PHONY: hooks build test fmt run install uninstall clean prune-cache
+.PHONY: hooks build test fmt run install uninstall release clean prune-cache
 
 hooks:
 	git config core.hooksPath .githooks
@@ -20,10 +20,36 @@ PREFIX ?= $(HOME)/.local
 
 install:
 	zig build -Doptimize=safe --prefix $(PREFIX)
-	install -Dm644 data/veneer.desktop $(PREFIX)/share/applications/veneer.desktop
 
 uninstall:
-	rm -f $(PREFIX)/bin/veneer $(PREFIX)/bin/veneer-inject.exe $(PREFIX)/share/applications/veneer.desktop
+	rm -f $(PREFIX)/bin/veneer $(PREFIX)/bin/veneer-inject.exe \
+		$(PREFIX)/share/applications/veneer.desktop \
+		$(PREFIX)/share/icons/hicolor/scalable/apps/veneer.svg
+	rm -rf $(PREFIX)/share/licenses/veneer
+
+VERSION ?= $(shell git describe --tags --always --dirty)
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct)
+RELEASE_TARGETS ?= x86_64-linux-gnu
+GPG ?= gpg
+GPG_KEY ?=
+
+release:
+	@test -z "$$(git status --porcelain)" || { echo "make release: commit or stash your changes first"; exit 1; }
+	rm -rf dist
+	mkdir -p dist
+	@for t in $(RELEASE_TARGETS); do \
+		name=veneer-$(VERSION)-$${t%%-linux*}-linux; \
+		zig build -Doptimize=safe -Dtarget=$$t -Dversion=$(VERSION) --prefix dist/$$name || exit 1; \
+		cp README.md dist/$$name/ || exit 1; \
+		tar -C dist --sort=name --owner=0 --group=0 --numeric-owner --mtime=@$(SOURCE_DATE_EPOCH) \
+			-czf dist/$$name.tar.gz $$name || exit 1; \
+		rm -rf dist/$$name; \
+	done
+	cd dist && sha256sum *.tar.gz > SHA256SUMS
+	cd dist && for f in *.tar.gz SHA256SUMS; do \
+		$(GPG) --batch --yes --armor --detach-sign $(if $(GPG_KEY),--local-user $(GPG_KEY)) $$f || exit 1; \
+	done
+	@echo "release $(VERSION) in dist/: tarballs, SHA256SUMS, and an .asc signature for each"
 
 clean:
 	rm -rf .zig-cache zig-out dist
