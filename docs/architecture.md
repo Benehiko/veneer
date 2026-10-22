@@ -45,6 +45,9 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/library/manual.zig` | games the player adds, in `library.zon` |
 | `src/library/cache.zig` | the last scan, so the window opens at once |
 | `src/runner/proton.zig` | Proton discovery and Steam's tool aliases |
+| `src/runner/ge_proton.zig` | GE-Proton download, digest check and safe unpacking |
+| `src/launch/steam_overlay.zig` | the variables that load Steam's overlay |
+| `src/gui/theme.zig` | Adwaita with Inter |
 | `src/config/` | per-game choices, global settings, the ZON file helper |
 | `src/launch/` | `compose`, `plan`, `gamescope`, `display`, `steam_client`, `execute`, `launcher` |
 | `src/hooks/overlay.zig` | the private overlay mount (`veneer __overlay`) |
@@ -103,11 +106,22 @@ dependency.
 
 Steam games run as Steam runs them: the `proton` script with
 `waitforexitandrun` and the `STEAM_COMPAT_*` variables, in the game's own
-`compatdata` prefix. Games Steam does not own get a prefix under
+`compatdata` prefix. Veneer also sets what Steam sets for its overlay:
+both `gameoverlayrenderer.so` builds in `LD_PRELOAD` (after any the player
+already has), `SteamOverlayGameId`, and
+`ENABLE_VK_LAYER_VALVE_steam_overlay_1=1` for Steam's Vulkan overlay layer. Games Steam does not own get a prefix under
 `$XDG_DATA_HOME/veneer/prefixes`. Steam games need the client for their DRM,
 so Veneer starts `steam -silent` first if `~/.steam/steam.pid` names no
 running Steam. `veneer install-proton` and the window's button send
 `steam://install/1493710` (Proton Experimental) to Steam.
+
+`veneer install-proton ge` and the Runner menu's **Download GE-Proton**
+ask GitHub's API for the latest GE-Proton release, pick the build for this
+CPU, download it, and check it against the SHA-256 digest GitHub publishes;
+a release without a digest is refused. Veneer unpacks the `.tar.gz` itself
+(`std.compress.flate` and `std.tar`), refusing entries that climb out,
+symlinks that point outside the build, and writes through a symlink, then
+renames the build into Steam's `compatibilitytools.d`.
 
 ## gamescope
 
@@ -203,7 +217,9 @@ player passes `--force`.
 **Stack:** [dvui](https://github.com/david-vanderson/dvui), pinned in
 `build.zig.zon`, on its `sdl3gpu` backend: SDL3, built from source, renders
 through SDL's GPU API (Vulkan on Linux). FreeType draws text; `stb_image`
-decodes cover art.
+decodes cover art. The theme is dvui's Adwaita (light or dark, following the
+system) with Inter as its font; Inter comes from its release zip, pinned in
+`build.zig.zon`, and is embedded in the binary.
 
 **Wayland first.** Veneer sets `SDL_HINT_VIDEO_DRIVER` to `wayland,x11`
 before SDL starts, so it runs natively on Wayland and uses X11 only when no

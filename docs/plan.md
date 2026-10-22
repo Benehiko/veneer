@@ -10,18 +10,14 @@ Steam launch options and without touching game files.
 
 **Veneer**: a thin layer laid over a surface without changing what lies
 beneath. Veneer layers runners, gamescope and upscalers over a game and
-leaves the install as it found it. The word is short, easy to type in a
-terminal, and does not collide with a known Linux gaming tool.
-
-Also considered: *Overlay* (taken by every game overlay), *Shim* (too
-technical), *Lens* (says upscaling but not launching). The name is settled.
+leaves the install as it found it.
 
 ## License
 
 GPL-3.0-or-later ([LICENSE](../LICENSE)), the license family of OptiScaler,
-Lutris and Heroic. Forks that ship must stay open, and code can move between
-Veneer and those projects. Every dependency (dvui MIT, SDL3 zlib, FreeType,
-stb) is compatible.
+Lutris and Heroic. Every dependency is compatible: dvui (MIT), SDL3 (zlib),
+FreeType, stb, and Inter (SIL Open Font License, shipped as
+`share/licenses/veneer/Inter-OFL.txt`).
 
 ## Principles
 
@@ -33,144 +29,104 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
 2. **Few choices, good defaults.** Each game page shows Runner, Display
    and Upscaling. Everything else is detected or tucked into one collapsed
    advanced section.
-3. **Warn before launch.** Known-bad combinations of kernel, Mesa, ROCm,
-   GPU, Proton and gamescope show a reason and a fix beside Play.
+3. **Warn before launch.** Known-bad combinations show a reason and a fix
+   beside Play.
 4. **Native and fast.** Zig 0.17, one binary, Wayland first with X11
    fallback, an idle window that uses no CPU.
 5. **Nix for tooling, no containers.**
 
-## What the player sees
+## Decisions
 
-```
-Veneer                  [ search...          ]   [ Add game ] [ Rescan ]
--------------------------------------------------------------------------
-[cover] [cover] [cover] [cover]  |  ELDEN RING
-[cover] [cover] [cover] [cover]  |  [          Play          ]
-[cover] [cover] [cover] [cover]  |
-                                 |  Runner     [ Automatic     v ]
-                                 |  Display    [ Gamescope     v ]
-                                 |  Upscaling  [ OptiScaler    v ]
-                                 |  [ Choose OptiScaler folder… ]
-                                 |
-                                 |  Warning: ...
-                                 |
-                                 |  > Advanced
-```
+| Question | Decision |
+| --- | --- |
+| GUI toolkit | dvui on SDL3's GPU backend |
+| Window font | Inter, embedded; pinned in `build.zig.zon` |
+| OptiScaler's `.7z` | no 7z code in Veneer: use an extracted release, or unpack with the host's `bsdtar`, `7zz` or `7z` |
+| Steam overlay outside Steam | load it, as Steam does: `gameoverlayrenderer.so` in `LD_PRELOAD`, `SteamOverlayGameId`, and Steam's Vulkan overlay layer |
+| Third-party Protons | offer GE-Proton downloads, verified against GitHub's digest, into Steam's `compatibilitytools.d` |
 
 ## Status
 
-| Milestone | State |
-| --- | --- |
-| M0 Scaffold | done |
-| M1 Library | done; checked against a real Steam install |
-| M2 Launch | done; checked with dry runs, not yet by playing |
-| M3 gamescope | done; checked with dry runs |
-| M4 Window | built; not yet opened on a desktop |
-| M5 Compatibility checks | done; needs sourced OptiScaler, Mesa and ROCm rules |
-| M6 Hooks | built; overlay and injection not yet run outside the build sandbox |
-| M7 OptiScaler | done; download, verify and unpack checked with v0.9.4; not yet run in a game |
-| M8 Runners | done; not yet run |
-| M9 Release | `.desktop` file and `make install`; packaging open |
+| Milestone | Built | Verified |
+| --- | --- | --- |
+| M0 Scaffold | yes | yes |
+| M1 Library | yes | yes, against a real Steam install |
+| M2 Launch | yes | dry runs only |
+| M3 gamescope | yes | dry runs only |
+| M4 Window | yes | compiles; not yet opened on a desktop |
+| M5 Compatibility checks | engine and probes | needs sourced OptiScaler, Mesa and ROCm rules |
+| M6 Hooks | yes | overlay blocked by the build sandbox; not yet run on a desktop |
+| M7 OptiScaler | yes | download, verify, unpack and staging checked with v0.9.4; not yet in a game |
+| M8 Runners | yes | GE-Proton download checked end to end; Steam's Proton install and custom Wine not yet run |
+| M9 Release | `.desktop`, `make install`, licenses installed | packaging still open |
 
-## Milestones
+## Done
 
-Each milestone ends with tests passing, docs updated, and a pull request.
-Headless commands come before the window so each layer can be tested on
-its own.
+- **Library:** Steam roots (native and Flatpak) and libraries; binary
+  `appinfo.vdf` for names, app types and launch entries; games added by hand;
+  cover art; a cached scan.
+- **Launching:** Proton discovery and Steam's tool mapping; the pure planner;
+  Steam started for Steam games; native games through the scout runtime;
+  logs per game; `--dry-run` that writes nothing.
+- **gamescope:** Display and Upscaling to argv, capabilities from
+  `gamescope --help`, output size from DRM.
+- **Steam overlay:** the variables Steam sets, for Steam games, joined to
+  any existing `LD_PRELOAD`.
+- **Compatibility:** kernel, GPU, Vulkan driver and Mesa, ROCm, user
+  namespaces, gamescope and display probes; sourced rules; `veneer doctor`;
+  launch refused on an error unless forced.
+- **Hooks:** environment; the private overlay mount, with an error per
+  refused step; `veneer-inject.exe`; anti-cheat refusal.
+- **OptiScaler:** pinned releases with SHA-256; download, list-check,
+  unpack with the host's tool, symlink check; staging as `dxgi.dll` with
+  `dxgi=n,b`, beside the exe or the Unreal `-Shipping.exe`; per-game
+  `OptiScaler.ini`; [guide](guides/optiscaler.md).
+- **Runners:** Proton Experimental through `steam://install`; GE-Proton
+  download, digest check, and native gzip and tar unpacking that refuses
+  links leaving the build; a Wine binary per game with its own prefix.
+- **Window:** dvui with Inter; library grid with cover art and search; game
+  page with Runner, Display, Upscaling, render scale, HDR and Advanced;
+  verdicts beside Play; Add game, Rescan, Download OptiScaler, Download
+  GE-Proton; workers for scanning, launching and downloading.
+- **Project:** GPL-3.0-or-later, Nix dev shell, git hooks, docs.
 
-### M0: Scaffold (done)
+## To do
 
-Nix flake dev shell, `build.zig` with `test`, `run` and `fmt`, the CLI
-skeleton, git hooks, AGENTS.md and these docs.
+### Verify on a desktop
 
-### M1: Library (done)
+Each needs a display, a GPU, or mount rights the build sandbox lacks.
 
-Text VDF and binary appinfo parsers; Steam roots (native and Flatpak),
-libraries and manifests; tools and runtimes filtered by app type; games
-added by hand; the cached scan. `veneer list`, `add`, `remove`, `show`.
+- [ ] The window opens in under 100 ms on a warm cache, idles at 0 % CPU,
+      and runs natively on Wayland and on X11; Inter renders.
+- [ ] `veneer doctor` lists the GPU and the Mesa or NVIDIA version.
+- [ ] A Proton game and a native game start as they do from Steam; the Steam
+      overlay opens with Shift+Tab.
+- [ ] gamescope runs a game fullscreen at native resolution, with FSR.
+- [ ] The overlay shows a test file only inside the game's namespace, and
+      the install's checksum is unchanged afterwards. Proton's Steam Linux
+      Runtime container sees the overlay.
+- [ ] `--inject` loads a test DLL into a Proton game.
+- [ ] OptiScaler's menu (Insert) appears in a DX12 game, and in an Unreal
+      game such as Hell is Us.
+- [ ] Install Proton Experimental from the window on a machine without
+      Proton; run a game on a GE-Proton build Veneer downloaded; run a game
+      on a custom Wine binary.
 
-### M2: Launch without hooks (done)
+### Build
 
-Proton discovery and Steam's mapping; the pure planner; spawn, log and
-wait; starting Steam for Steam games; native launches through the scout
-runtime. `veneer run`, `runners`, `set`.
-
-**Still to verify:** a Proton game and a native game start from Veneer
-with the same result as from Steam.
-
-### M3: gamescope (done)
-
-Display and Upscaling to argv; capabilities from `gamescope --help`; output
-size from DRM.
-
-**Still to verify:** a game runs fullscreen at native resolution.
-
-### M4: The window (built)
-
-dvui on SDL3's GPU backend; Wayland first; event-driven redraw; library
-grid with cover art and search; the game page; choices saved as they
-change; cached library; workers for scanning and launching.
-
-**Done when** the window opens in under 100 ms on a warm cache, idles at
-0 % CPU, and runs natively on Wayland and on X11.
-
-### M5: Compatibility checks (done)
-
-Probes for kernel, GPUs, Vulkan driver and Mesa version, ROCm, user
-namespaces, gamescope and display; `data/compat.tsv` with a source on every
-row; verdicts on the game page and in `veneer doctor`.
-
-**Still to do:** OptiScaler, Mesa and ROCm requirements, each with a source.
-
-### M6: Hooks (built)
-
-Environment hooks; `veneer-inject.exe`; the overlay mount; anti-cheat
-refusal.
-
-**Done when** a test DLL loads into a Proton game through `--inject`, a test
-file appears in the game directory only inside the overlay, and a checksum
-of the install is unchanged after both.
-
-### M7: OptiScaler (done)
-
-A release is linked into the game's overlay beside the exe (or the Unreal
-shipping exe) as `dxgi.dll`, with `WINEDLLOVERRIDES=dxgi=n,b`, and a
-per-game copy of `OptiScaler.ini`. The player either points Veneer at an
-extracted release or lets it download a pinned one, which Veneer unpacks
-with the host's `bsdtar`, `7zz` or `7z`; Veneer carries no 7z code
-([guide](guides/optiscaler.md)). Adding a release is one row in
-`data/optiscaler.tsv`, with the SHA-256 GitHub publishes for the asset.
-
-**Done when** OptiScaler's menu appears in a DX12 game with the install's
-checksum unchanged.
-
-### M8: Runners (done)
-
-Install Proton Experimental through Steam; pick a Wine binary for a game,
-which then gets its own prefix.
-
-**Done when** a machine with no Proton gets one from the window without
-leaving Veneer.
-
-### M9: Release
-
-- Done: `data/veneer.desktop`, `make install`.
-- `make release`: signed tarballs and checksums, as in
-  elden-ring-mods-engine.
-- An icon.
-- A Nix package output in the flake. Zig fetches dvui and SDL at build
-  time, so the package must pre-fetch them (`zig build --fetch` into a
-  fixed-output derivation).
-- A user guide.
-
-Flatpak is out of scope: its sandbox blocks launching host Proton and
-gamescope and creating namespaces, which Veneer needs.
+- [ ] **Compatibility rules (M5):** OptiScaler, Mesa and ROCm requirements in
+      `data/compat.tsv`, each with a source.
+- [ ] **Steam Proton install progress (M8):** follow the install instead of
+      asking the player to press Rescan.
+- [ ] **Custom Wine prefixes (M8):** install DXVK and VKD3D-Proton into
+      prefixes Veneer creates, so DirectX games do not fall back to WineD3D.
+- [ ] **Release (M9):** `make release` with signed tarballs and checksums;
+      an icon; a Nix package (dvui, SDL3 and Inter fetched ahead of the
+      build); a user guide.
 
 ## Open questions
 
-| Question | Decide by |
+| Question | Notes |
 | --- | --- |
-| Distributions that restrict unprivileged user namespaces (Ubuntu's AppArmor policy): ship a profile, or rely on injection only? | M6 |
-| Launching outside the Steam UI loses the Steam overlay and may lose playtime tracking. Preload Steam's overlay library, or accept the loss? | M2 |
-| Third-party Protons (GE-Proton, Proton-EM): offer downloads from GitHub, or only list what the player installed? | M8 |
-| A font for the window: ship one (Inter, OFL) or use dvui's default? | M4 |
+| Mount the overlay on every launch, or only when a hook needs it? | Today: only when needed. Always mounting keeps files the game writes beside its exe in one place; only-when-needed keeps plain launches identical to Steam's. Decide after the overlay runs on a desktop. |
+| Systems that block unprivileged user namespaces: ship an AppArmor profile, or rely on injection? | Later. Ubuntu 24.04 and newer restrict them through AppArmor by default; Flatpak sandboxes forbid them. |

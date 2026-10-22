@@ -116,6 +116,7 @@ pub const usage =
     \\                              (needs bsdtar, 7zz or 7z; see docs/guides/optiscaler.md)
     \\  optiscaler releases         the pinned releases, and which is installed
     \\  install-proton              ask Steam to install Proton Experimental
+    \\  install-proton ge           download and verify the latest GE-Proton into Steam's compatibilitytools.d
     \\  help                        show this text
     \\  version                     print the version
     \\

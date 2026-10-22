@@ -18,6 +18,7 @@ const settings_mod = @import("config/settings.zig");
 const optiscaler = @import("hooks/optiscaler.zig");
 const opti_releases = @import("optiscaler/releases.zig");
 const opti_install = @import("optiscaler/install.zig");
+const ge_proton = @import("runner/ge_proton.zig");
 const facts_mod = @import("compat/facts.zig");
 const rules = @import("compat/rules.zig");
 const Game = library.Game;
@@ -305,7 +306,20 @@ pub fn optiscalerDir(ctx: Ctx, args: []const []const u8) !void {
     try ctx.out.print("OptiScaler release: {s}\nturn it on per game with `veneer set <game> upscaling=optiscaler`\n", .{dir});
 }
 
-pub fn installProton(ctx: Ctx) !void {
+pub fn installProton(ctx: Ctx, args: []const []const u8) !void {
+    if (args.len > 0 and std.ascii.eqlIgnoreCase(args[0], "ge")) {
+        const home = ctx.env.get("HOME") orelse return fail("HOME is not set", .{});
+        const locations = try steam.locate(ctx.arena, ctx.io, home);
+        if (locations.len == 0) return fail("GE-Proton installs into Steam's compatibilitytools.d, and no Steam install was found", .{});
+        try ctx.out.writeAll("downloading the latest GE-Proton\n");
+        try ctx.out.flush();
+        const done = ge_proton.install(ctx.arena, ctx.gpa, ctx.io, locations[0].root) catch |err| {
+            return fail("{s}", .{ge_proton.explain(err) orelse @errorName(err)});
+        };
+        try ctx.out.print("{s} installed in {s}\nuse it with `veneer set <game> runner={s}`; restart Steam to see it there\n", .{ done.tag, done.dir, done.tag });
+        return;
+    }
+    if (args.len > 0) return fail("install-proton: say nothing for Proton Experimental through Steam, or `ge` for GE-Proton", .{});
     steam_client.requestInstall(ctx.io, steam_client.proton_experimental_app_id) catch return fail("could not start Steam to install Proton", .{});
     try ctx.out.writeAll("Steam is installing Proton Experimental; it appears in `veneer runners` when Steam finishes\n");
 }

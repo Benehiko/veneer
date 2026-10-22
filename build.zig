@@ -36,6 +36,12 @@ pub fn build(b: *std.Build) void {
     root.addImport("dvui", dvui_dep.module("dvui_sdl3gpu"));
     root.addImport("sdl3gpu-backend", dvui_dep.module("sdl3gpu"));
 
+    const inter = b.dependency("inter", .{});
+    root.addAnonymousImport("inter_regular", .{ .root_source_file = inter.path("extras/ttf/Inter-Regular.ttf") });
+    root.addAnonymousImport("inter_semibold", .{ .root_source_file = inter.path("extras/ttf/Inter-SemiBold.ttf") });
+    b.getInstallStep().dependOn(&b.addInstallFile(inter.path("LICENSE.txt"), "share/licenses/veneer/Inter-OFL.txt").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(b.path("LICENSE"), "share/licenses/veneer/LICENSE").step);
+
     const exe = b.addExecutable(.{ .name = "veneer", .root_module = root });
     b.installArtifact(exe);
 

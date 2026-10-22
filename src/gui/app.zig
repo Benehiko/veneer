@@ -24,6 +24,8 @@ const optiscaler = @import("../hooks/optiscaler.zig");
 const steam_client = @import("../launch/steam_client.zig");
 const opti_releases = @import("../optiscaler/releases.zig");
 const opti_install = @import("../optiscaler/install.zig");
+const ge_proton = @import("../runner/ge_proton.zig");
+const theme = @import("theme.zig");
 
 const card_w = 160;
 const card_h = 240;
@@ -85,7 +87,17 @@ const App = struct {
     search: [128]u8 = @splat(0),
     scanning: std.atomic.Value(bool) = .init(false),
     installing: std.atomic.Value(bool) = .init(false),
+    installing_proton: std.atomic.Value(bool) = .init(false),
     threads: std.ArrayList(std.Thread) = .empty,
+
+    fn startProtonDownload(app: *App) void {
+        if (app.installing_proton.swap(true, .acq_rel)) return;
+        const t = std.Thread.spawn(.{}, protonWorker, .{app}) catch {
+            app.installing_proton.store(false, .release);
+            return;
+        };
+        app.threads.append(app.gpa, t) catch t.detach();
+    }
 
     fn startInstall(app: *App) void {
         if (app.installing.swap(true, .acq_rel)) return;
@@ -327,17 +339,20 @@ const App = struct {
 
         dvui.labelNoFmt(@src(), "Runner", .{}, .{ .margin = .{ .y = 8 } });
         const menu = model.runnerMenu(frame_arena, lib.tools, sel.choices.runner, game.platform) catch return;
-        const labels = std.mem.concat(frame_arena, []const u8, &.{ menu.labels, &.{"Choose a Wine binary…"} }) catch return;
+        const ge_label = if (app.installing_proton.load(.acquire)) "Downloading GE-Proton…" else "Download GE-Proton (latest)…";
+        const labels = std.mem.concat(frame_arena, []const u8, &.{ menu.labels, &.{ "Choose a Wine binary…", ge_label } }) catch return;
         var runner_idx: ?usize = menu.indexOf(sel.choices.runner);
         if (dvui.dropdown(@src(), labels, .{ .choice_nullable = &runner_idx }, .{}, .{ .expand = .horizontal })) {
             if (runner_idx) |k| {
                 if (k < menu.values.len) {
                     sel.choices.runner = a.dupe(u8, menu.values[k]) catch sel.choices.runner;
                     app.save();
-                } else if (app.pickFile("Choose a Wine binary")) |wine| {
-                    sel.choices.runner = a.dupe(u8, wine) catch sel.choices.runner;
-                    app.save();
-                }
+                } else if (k == menu.values.len) {
+                    if (app.pickFile("Choose a Wine binary")) |wine| {
+                        sel.choices.runner = a.dupe(u8, wine) catch sel.choices.runner;
+                        app.save();
+                    }
+                } else app.startProtonDownload();
             }
         }
         if (game.platform == .windows and lib.probed and lib.tools.len == 0) {
@@ -506,6 +521,23 @@ fn scanWorker(app: *App) void {
     dvui.refresh(app.win, @src(), null);
 }
 
+fn protonWorker(app: *App) void {
+    defer app.installing_proton.store(false, .release);
+    var arena_state = std.heap.ArenaAllocator.init(app.gpa);
+    defer arena_state.deinit();
+    const a = arena_state.allocator();
+
+    const home = app.env.get("HOME") orelse return;
+    const locations = steam.locate(a, app.io, home) catch return;
+    if (locations.len == 0) return app.post("GE-Proton installs into Steam's compatibilitytools.d, and no Steam install was found", .{});
+    app.post("Downloading the latest GE-Proton…", .{});
+    const done = ge_proton.install(a, app.gpa, app.io, locations[0].root) catch |err| {
+        return app.post("GE-Proton: {s}", .{ge_proton.explain(err) orelse @errorName(err)});
+    };
+    app.post("{s} is installed; choose it under Runner (restart Steam to see it there too)", .{done.tag});
+    app.startScan();
+}
+
 fn installWorker(app: *App) void {
     defer app.installing.store(false, .release);
     var arena_state = std.heap.ArenaAllocator.init(app.gpa);
@@ -568,10 +600,10 @@ pub fn run(gpa: Allocator, io: Io, env: *const Environ.Map) !void {
 
     var window_open = true;
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
-        .theme = switch (backend.preferredColorScheme() orelse .dark) {
-            .light => dvui.Theme.builtin.adwaita_light,
-            .dark => dvui.Theme.builtin.adwaita_dark,
-        },
+        .theme = theme.veneer(switch (backend.preferredColorScheme() orelse .dark) {
+            .light => false,
+            .dark => true,
+        }),
         .open_flag = &window_open,
     });
     defer win.deinit();

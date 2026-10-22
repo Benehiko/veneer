@@ -53,7 +53,7 @@ pub fn main(init: std.process.Init) !void {
         .runners => commands.runners(ctx),
         .doctor => commands.doctor(ctx),
         .optiscaler => commands.optiscalerDir(ctx, cmd.rest),
-        .install_proton => commands.installProton(ctx),
+        .install_proton => commands.installProton(ctx, cmd.rest),
     };
     result catch |err| {
         out.flush() catch {};
@@ -90,4 +90,6 @@ test {
     _ = @import("optiscaler/releases.zig");
     _ = @import("optiscaler/unpack.zig");
     _ = @import("optiscaler/install.zig");
+    _ = @import("launch/steam_overlay.zig");
+    _ = @import("runner/ge_proton.zig");
 }

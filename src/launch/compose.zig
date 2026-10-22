@@ -15,6 +15,7 @@ const anticheat = @import("../hooks/anticheat.zig");
 const inject_env = @import("../inject/env.zig");
 const optiscaler = @import("../hooks/optiscaler.zig");
 const settings_mod = @import("../config/settings.zig");
+const steam_overlay = @import("steam_overlay.zig");
 
 pub const Error = error{
     NoExecutable,
@@ -193,6 +194,7 @@ pub fn compose(
 
     var vars: std.ArrayList(plan.EnvVar) = .empty;
     if (effective.optiscaler_dir != null) try vars.append(arena, .{ .name = "WINEDLLOVERRIDES", .value = optiscaler.dll_override });
+    if (game.steam) |s| try vars.appendSlice(arena, try steam_overlay.vars(arena, io, s.root, s.app_id, env.get("LD_PRELOAD")));
     for (choices.env) |assignment| {
         const v = plan.parseEnvAssignment(assignment) orelse {
             std.log.warn("ignoring '{s}': not NAME=value", .{assignment});
