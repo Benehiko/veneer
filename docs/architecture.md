@@ -307,7 +307,10 @@ Veneer never uses, and some of those carry broken hashes upstream. The package t
 `zig build --pkg-dir` pointing there; Nix's sandbox has no network, so
 nothing more is fetched. (`--system` would not do: it also turns on every
 system-library integration, and dvui then looks for SDL3 and FreeType on
-the host instead of building them.) Then `autoPatchelfHook` adds the Vulkan loader, Wayland, libxkbcommon,
-libdecor and X11 libraries that SDL and Veneer open at run time. When
+the host instead of building them.) Then `autoPatchelfHook` adds every
+library SDL and Veneer may open at run time: the Vulkan loader, libglvnd,
+Wayland, libxkbcommon, libdecor, X11, DRM, udev, dbus, PipeWire,
+PulseAudio, ALSA, fribidi, libthai, libusb and liburing. Steam's API,
+sndio, JACK and `libGLES_CM` are left out. When
 `build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
 to `lib.fakeHash`, run `nix build`, and copy the hash Nix reports.

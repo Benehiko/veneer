@@ -38,8 +38,20 @@
             outputHash = depsHash;
           };
 
-          runtimeLibs = [
+          runtimeLibs = map pkgs.lib.getLib [
             pkgs.vulkan-loader
+            pkgs.libglvnd
+            pkgs.libdrm
+            pkgs.dbus
+            pkgs.systemdLibs
+            pkgs.pipewire
+            pkgs.libpulseaudio
+            pkgs.alsa-lib
+            pkgs.libxtst
+            pkgs.fribidi
+            pkgs.libthai
+            pkgs.libusb1
+            pkgs.liburing
             pkgs.wayland
             pkgs.libxkbcommon
             pkgs.libdecor
@@ -63,6 +75,13 @@
             ];
             buildInputs = runtimeLibs;
             runtimeDependencies = runtimeLibs;
+            autoPatchelfIgnoreMissingDeps = [
+              "libsteam_api.so"
+              "libsndio.so.7"
+              "libjack.so.0"
+              "libGLES_CM.so.1"
+              "libGLESv1_CM.so.1"
+            ];
             dontConfigure = true;
             dontBuild = true;
             installPhase = ''
