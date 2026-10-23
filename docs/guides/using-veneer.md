@@ -77,6 +77,14 @@ OptiScaler's menu. See the [OptiScaler guide](optiscaler.md).
 Do not use OptiScaler in online games: anti-cheat may ban you. Veneer
 refuses to layer files into games that ship EasyAntiCheat or BattlEye.
 
+## Jobs
+
+Downloads, unpacking, setup and running games show in the jobs panel.
+Press **Jobs** in the header to slide it in from the right; the button
+shows how many jobs are running. Each job shows its step and, when Veneer
+knows the size, a progress bar. A failed job says why. **Clear finished**
+empties the list.
+
 ## The command line
 
 Every feature works without the window. `veneer help` lists them all.

@@ -6,6 +6,8 @@ const paths = @import("../paths.zig");
 const releases = @import("releases.zig");
 const unpack = @import("unpack.zig");
 const stage = @import("../hooks/optiscaler.zig");
+const jobs = @import("../jobs.zig");
+const download = @import("../download.zig");
 
 pub const guide = "docs/guides/optiscaler.md";
 
@@ -18,7 +20,7 @@ pub fn installedDir(arena: Allocator, io: Io, env: *const Environ.Map, tag: []co
     return unpack.releaseDir(arena, io, dir, stage.source_dll) catch null;
 }
 
-pub fn install(gpa: Allocator, arena: Allocator, io: Io, env: *const Environ.Map, release: releases.Release) ![]const u8 {
+pub fn install(gpa: Allocator, arena: Allocator, io: Io, env: *const Environ.Map, release: releases.Release, job: ?jobs.Job) ![]const u8 {
     if (try installedDir(arena, io, env, release.tag)) |dir| return dir;
     const tool = (try unpack.find(arena, io, env)) orelse return error.NoUnpacker;
 
@@ -27,8 +29,8 @@ pub fn install(gpa: Allocator, arena: Allocator, io: Io, env: *const Environ.Map
     const archive = try std.fs.path.join(arena, &.{ base, try std.fmt.allocPrint(arena, ".download-{s}", .{release.fileName()}) });
     defer Io.Dir.cwd().deleteFile(io, archive) catch {};
 
-    try download(gpa, io, release.url, archive);
-    try verify(arena, io, archive, release.sha256);
+    try download.toFile(gpa, io, release.url, archive, release.sha256, job);
+    jobs.step(job, .unpacking, std.fs.path.basename(tool.path));
 
     var tool_env = try unpack.childEnv(gpa, env);
     defer tool_env.deinit();
@@ -69,29 +71,6 @@ fn exitedZero(term: std.process.Child.Term) bool {
     };
 }
 
-fn download(gpa: Allocator, io: Io, url: []const u8, dest: []const u8) !void {
-    var client: std.http.Client = .{ .allocator = gpa, .io = io };
-    defer client.deinit();
-    const file = try Io.Dir.cwd().createFile(io, dest, .{});
-    defer file.close(io);
-    var buf: [64 * 1024]u8 = undefined;
-    var w = file.writerStreaming(io, &buf);
-    const result = client.fetch(.{ .location = .{ .url = url }, .response_writer = &w.interface }) catch return error.DownloadFailed;
-    try w.interface.flush();
-    if (result.status != .ok) return error.DownloadFailed;
-}
-
-pub fn digestMatches(bytes: []const u8, want: [32]u8) bool {
-    var got: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(bytes, &got, .{});
-    return std.crypto.timing_safe.eql([32]u8, got, want);
-}
-
-fn verify(arena: Allocator, io: Io, archive: []const u8, want: [32]u8) !void {
-    const bytes = try Io.Dir.cwd().readFileAlloc(io, archive, arena, .limited(1 << 30));
-    if (!digestMatches(bytes, want)) return error.ChecksumMismatch;
-}
-
 pub fn explain(err: anyerror) ?[]const u8 {
     return switch (err) {
         error.NoUnpacker => "no bsdtar, 7zz or 7z on PATH: install one (see " ++ guide ++ "), or extract the release yourself and choose its folder",
@@ -104,13 +83,4 @@ pub fn explain(err: anyerror) ?[]const u8 {
         error.UnknownRelease => "Veneer has no pinned release with that tag; see `veneer optiscaler releases`",
         else => null,
     };
-}
-
-const testing = std.testing;
-
-test "only the exact bytes match a pinned digest" {
-    var want: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash("archive", &want, .{});
-    try testing.expect(digestMatches("archive", want));
-    try testing.expect(!digestMatches("archivf", want));
 }

@@ -94,4 +94,6 @@ test {
     _ = @import("runner/ge_proton.zig");
     _ = @import("runner/steam_install.zig");
     _ = @import("runner/translators.zig");
+    _ = @import("jobs.zig");
+    _ = @import("download.zig");
 }

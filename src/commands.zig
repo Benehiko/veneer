@@ -283,7 +283,7 @@ pub fn optiscalerDir(ctx: Ctx, args: []const []const u8) !void {
             opti_releases.newest(pinned) orelse return fail("no OptiScaler release is pinned", .{});
         try ctx.out.print("installing OptiScaler {s}\n", .{release.tag});
         try ctx.out.flush();
-        const dir = opti_install.install(ctx.gpa, ctx.arena, ctx.io, ctx.env, release) catch |err| {
+        const dir = opti_install.install(ctx.gpa, ctx.arena, ctx.io, ctx.env, release, null) catch |err| {
             return fail("{s}", .{opti_install.explain(err) orelse @errorName(err)});
         };
         s.optiscaler_dir = dir;
@@ -314,7 +314,7 @@ pub fn installProton(ctx: Ctx, args: []const []const u8) !void {
         if (locations.len == 0) return fail("GE-Proton installs into Steam's compatibilitytools.d, and no Steam install was found", .{});
         try ctx.out.writeAll("downloading the latest GE-Proton\n");
         try ctx.out.flush();
-        const done = ge_proton.install(ctx.arena, ctx.gpa, ctx.io, locations[0].root) catch |err| {
+        const done = ge_proton.install(ctx.arena, ctx.gpa, ctx.io, locations[0].root, null) catch |err| {
             return fail("{s}", .{ge_proton.explain(err) orelse @errorName(err)});
         };
         try ctx.out.print("{s} installed in {s}\nuse it with `veneer set <game> runner={s}`; restart Steam to see it there\n", .{ done.tag, done.dir, done.tag });

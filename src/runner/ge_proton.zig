@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
+const jobs = @import("../jobs.zig");
+const download = @import("../download.zig");
 
 pub const latest_api = "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest";
 
@@ -88,26 +90,40 @@ pub const Compression = enum { gzip, zstd };
 
 pub const zstd_window_len = 1 << 25;
 
-pub fn extract(arena: Allocator, io: Io, archive: []const u8, compression: Compression, dest: Io.Dir) !void {
+pub fn extract(arena: Allocator, io: Io, archive: []const u8, compression: Compression, dest: Io.Dir, job: ?jobs.Job) !void {
     const file = try Io.Dir.cwd().openFile(io, archive, .{});
     defer file.close(io);
     var file_buf: [64 * 1024]u8 = undefined;
     var file_reader = file.readerStreaming(io, &file_buf);
+    const size = file.length(io) catch 0;
+    jobs.step(job, .unpacking, std.fs.path.basename(archive));
+    const meter: Meter = .{ .job = job, .file = &file_reader, .size = size };
     switch (compression) {
         .gzip => {
             var window: [std.compress.flate.max_window_len]u8 = undefined;
             var gz: std.compress.flate.Decompress = .init(&file_reader.interface, .gzip, &window);
-            try extractTar(arena, io, &gz.reader, dest);
+            try extractTar(arena, io, &gz.reader, dest, meter);
         },
         .zstd => {
             const window = try arena.alloc(u8, zstd_window_len + std.compress.zstd.block_size_max);
             var zs: std.compress.zstd.Decompress = .init(&file_reader.interface, window, .{ .window_len = zstd_window_len });
-            try extractTar(arena, io, &zs.reader, dest);
+            try extractTar(arena, io, &zs.reader, dest, meter);
         },
     }
 }
 
-pub fn extractTar(arena: Allocator, io: Io, reader: *Io.Reader, dest: Io.Dir) !void {
+pub const Meter = struct {
+    job: ?jobs.Job = null,
+    file: ?*Io.File.Reader = null,
+    size: u64 = 0,
+
+    fn tick(m: Meter) void {
+        const f = m.file orelse return;
+        jobs.progress(m.job, f.logicalPos(), m.size);
+    }
+};
+
+pub fn extractTar(arena: Allocator, io: Io, reader: *Io.Reader, dest: Io.Dir, meter: Meter) !void {
     var name_buf: [std.fs.max_path_bytes]u8 = undefined;
     var link_buf: [std.fs.max_path_bytes]u8 = undefined;
     var it: std.tar.Iterator = .init(reader, .{ .file_name_buffer = &name_buf, .link_name_buffer = &link_buf });
@@ -139,6 +155,7 @@ pub fn extractTar(arena: Allocator, io: Io, reader: *Io.Reader, dest: Io.Dir) !v
                 try w.interface.flush();
             },
         }
+        meter.tick();
     }
 }
 
@@ -156,8 +173,10 @@ pub fn fetchLatest(arena: Allocator, gpa: Allocator, io: Io) !Pick {
     return pick(try parseRelease(arena, body.written()), builtin.cpu.arch);
 }
 
-pub fn install(arena: Allocator, gpa: Allocator, io: Io, steam_root: []const u8) !struct { tag: []const u8, dir: []const u8 } {
+pub fn install(arena: Allocator, gpa: Allocator, io: Io, steam_root: []const u8, job: ?jobs.Job) !struct { tag: []const u8, dir: []const u8 } {
+    jobs.step(job, .queued, "asking GitHub for the latest release");
     const choice = try fetchLatest(arena, gpa, io);
+    if (job) |j| j.title(choice.tag);
     const tools = try std.fs.path.join(arena, &.{ steam_root, "compatibilitytools.d" });
     if (try installedBuild(arena, io, tools, choice.tag)) |name| {
         return .{ .tag = name, .dir = try std.fs.path.join(arena, &.{ tools, name }) };
@@ -166,7 +185,7 @@ pub fn install(arena: Allocator, gpa: Allocator, io: Io, steam_root: []const u8)
 
     const archive = try std.fs.path.join(arena, &.{ tools, try std.fmt.allocPrint(arena, ".download-{s}.tar.gz", .{choice.tag}) });
     defer Io.Dir.cwd().deleteFile(io, archive) catch {};
-    try download(gpa, io, choice.url, archive, choice.sha256);
+    try download.toFile(gpa, io, choice.url, archive, choice.sha256, job);
 
     const tmp = try std.fs.path.join(arena, &.{ tools, try std.fmt.allocPrint(arena, ".unpack-{s}", .{choice.tag}) });
     Io.Dir.cwd().deleteTree(io, tmp) catch {};
@@ -175,8 +194,9 @@ pub fn install(arena: Allocator, gpa: Allocator, io: Io, steam_root: []const u8)
     {
         var dest = try Io.Dir.cwd().openDir(io, tmp, .{});
         defer dest.close(io);
-        try extract(arena, io, archive, .gzip, dest);
+        try extract(arena, io, archive, .gzip, dest, job);
     }
+    jobs.step(job, .installing, "compatibilitytools.d");
     const name = try buildDir(arena, io, tmp);
     const installed = try std.fs.path.join(arena, &.{ tools, name });
     Io.Dir.cwd().access(io, installed, .{}) catch {
@@ -216,36 +236,6 @@ fn buildDir(arena: Allocator, io: Io, root: []const u8) ![]const u8 {
         return arena.dupe(u8, entry.name);
     }
     return error.NotAProtonBuild;
-}
-
-pub fn download(gpa: Allocator, io: Io, url: []const u8, dest: []const u8, want: [32]u8) !void {
-    {
-        var client: std.http.Client = .{ .allocator = gpa, .io = io };
-        defer client.deinit();
-        const file = try Io.Dir.cwd().createFile(io, dest, .{});
-        defer file.close(io);
-        var buf: [64 * 1024]u8 = undefined;
-        var w = file.writerStreaming(io, &buf);
-        const result = client.fetch(.{ .location = .{ .url = url }, .response_writer = &w.interface }) catch return error.DownloadFailed;
-        try w.interface.flush();
-        if (result.status != .ok) return error.DownloadFailed;
-    }
-    const file = try Io.Dir.cwd().openFile(io, dest, .{});
-    defer file.close(io);
-    var buf: [64 * 1024]u8 = undefined;
-    var r = file.readerStreaming(io, &buf);
-    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
-    while (true) {
-        const chunk = r.interface.peekGreedy(1) catch |err| switch (err) {
-            error.EndOfStream => break,
-            else => return err,
-        };
-        hasher.update(chunk);
-        r.interface.toss(chunk.len);
-    }
-    var got: [32]u8 = undefined;
-    hasher.final(&got);
-    if (!std.crypto.timing_safe.eql([32]u8, got, want)) return error.ChecksumMismatch;
 }
 
 pub fn explain(err: anyerror) ?[]const u8 {

@@ -10,6 +10,15 @@ pub const upscaling_labels = [_][]const u8{ "Off", "FSR 1 in gamescope", "NIS in
 
 pub const scale_labels = [_][]const u8{ "100% (native)", "77% (quality)", "67% (balanced)", "59% (performance)", "50% (ultra performance)" };
 
+pub fn sizeText(buf: []u8, done: u64, total: u64) []const u8 {
+    const mib = 1024.0 * 1024.0;
+    const d = @as(f64, @floatFromInt(done)) / mib;
+    if (total == 0) return std.fmt.bufPrint(buf, "{d:.1} MB", .{d}) catch "";
+    const t = @as(f64, @floatFromInt(total)) / mib;
+    const pct = @min(100, done * 100 / total);
+    return std.fmt.bufPrint(buf, "{d:.1} of {d:.1} MB, {d}%", .{ d, t, pct }) catch "";
+}
+
 pub fn scaleIndex(scale: u8) usize {
     var best: usize = 0;
     var best_gap: u8 = 255;
@@ -137,4 +146,11 @@ test "environment assignments survive the one-line text field" {
     const back = try envList(a, line);
     try testing.expectEqual(env.len, back.len);
     for (env, back) |want, got| try testing.expectEqualStrings(want, got);
+}
+
+test "sizes read in megabytes, with the percentage when the total is known" {
+    var buf: [64]u8 = undefined;
+    try testing.expectEqualStrings("12.5 of 50.0 MB, 25%", sizeText(&buf, 12.5 * 1024 * 1024, 50 * 1024 * 1024));
+    try testing.expectEqualStrings("3.0 MB", sizeText(&buf, 3 * 1024 * 1024, 0));
+    try testing.expectEqualStrings("2.0 of 1.0 MB, 100%", sizeText(&buf, 2 * 1024 * 1024, 1024 * 1024));
 }

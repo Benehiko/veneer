@@ -95,7 +95,8 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
 - **Window:** dvui with Inter; library grid with cover art and search; game
   page with Runner, Display, Upscaling, render scale, HDR and Advanced;
   verdicts beside Play; Add game, Rescan, Download OptiScaler, Download
-  GE-Proton; workers for scanning, launching and downloading.
+  GE-Proton; workers for scanning, launching and downloading; a jobs panel
+  that slides in from the right with each job's step and progress.
 - **Project:** GPL-3.0-or-later, Nix dev shell, git hooks, docs.
 
 ## To do
@@ -122,6 +123,8 @@ Each needs a display, a GPU, or mount rights the build sandbox lacks.
 
 - [ ] Installing Proton Experimental from the window shows Steam's progress
       on the button and rescans when Steam finishes.
+- [ ] The jobs panel slides in and out smoothly, and its bars follow a
+      GE-Proton download and unpack.
 - [ ] A DirectX 11 and a DirectX 12 game run on a custom Wine binary through
       DXVK and VKD3D-Proton (`DXVK_HUD=1` shows), and the VKD3D-Proton
       `.tar.zst` unpacks.

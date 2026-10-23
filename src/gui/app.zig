@@ -27,10 +27,13 @@ const opti_install = @import("../optiscaler/install.zig");
 const ge_proton = @import("../runner/ge_proton.zig");
 const steam_install = @import("../runner/steam_install.zig");
 const theme = @import("theme.zig");
+const jobs = @import("../jobs.zig");
 
 const card_w = 160;
 const card_h = 240;
 const panel_w = 380;
+const jobs_w = 340;
+const slide_us = 220_000;
 
 const Library = struct {
     arena: std.heap.ArenaAllocator,
@@ -91,7 +94,11 @@ const App = struct {
     installing_proton: std.atomic.Value(bool) = .init(false),
     following_steam: std.atomic.Value(bool) = .init(false),
     steam_progress: ?steam_install.Progress = null,
+    steam_job: ?jobs.Job = null,
     threads: std.ArrayList(std.Thread) = .empty,
+    board: jobs.Board,
+    jobs_open: bool = false,
+    toggle_jobs: bool = false,
 
     fn startSteamProtonInstall(app: *App) void {
         if (app.following_steam.swap(true, .acq_rel)) return;
@@ -225,16 +232,18 @@ const App = struct {
         defer root.deinit();
 
         app.header();
+        const jobs_width = app.slideJobs(root.data().id);
 
         var body = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         defer body.deinit();
 
-        const lib = app.lib orelse {
+        if (app.lib) |lib| {
+            app.grid(lib);
+            if (app.sel != null) app.panel(lib);
+        } else {
             dvui.labelNoFmt(@src(), "Looking for games…", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both });
-            return;
-        };
-        app.grid(lib);
-        if (app.sel != null) app.panel(lib);
+        }
+        if (jobs_width >= 1) app.jobsPanel(jobs_width);
     }
 
     fn header(app: *App) void {
@@ -251,6 +260,92 @@ const App = struct {
         if (dvui.button(@src(), "Add game", .{}, .{ .gravity_y = 0.5 })) app.addGame();
         const label = if (app.scanning.load(.acquire)) "Scanning…" else "Rescan";
         if (dvui.button(@src(), label, .{}, .{ .gravity_y = 0.5 })) app.startScan();
+        const busy = app.board.running();
+        var jobs_buf: [32]u8 = undefined;
+        const jobs_label = if (busy == 0) "Jobs" else std.fmt.bufPrint(&jobs_buf, "Jobs ({d})", .{busy}) catch "Jobs";
+        if (dvui.button(@src(), jobs_label, .{}, .{ .gravity_y = 0.5 })) app.toggle_jobs = true;
+    }
+
+    fn jobsWidth(app: *App, id: dvui.Id) f32 {
+        if (dvui.animationGet(id, "jobs")) |a| return a.value();
+        return if (app.jobs_open) jobs_w else 0;
+    }
+
+    fn slideJobs(app: *App, id: dvui.Id) f32 {
+        if (app.toggle_jobs) {
+            app.toggle_jobs = false;
+            const from = app.jobsWidth(id);
+            app.jobs_open = !app.jobs_open;
+            dvui.animation(id, "jobs", .{
+                .easing = dvui.easing.outCubic,
+                .start_val = from,
+                .end_val = if (app.jobs_open) jobs_w else 0,
+                .end_time = slide_us,
+            });
+        }
+        return app.jobsWidth(id);
+    }
+
+    fn jobsPanel(app: *App, width: f32) void {
+        var side = dvui.box(@src(), .{}, .{
+            .expand = .vertical,
+            .min_size_content = .width(width),
+            .max_size_content = .width(width),
+            .background = true,
+            .border = .{ .x = 1 },
+        });
+        defer side.deinit();
+        var scroll = dvui.scrollArea(@src(), .{ .horizontal = .auto, .horizontal_bar = .hide }, .{ .expand = .both });
+        defer scroll.deinit();
+        var inner = dvui.box(@src(), .{}, .{
+            .min_size_content = .width(jobs_w - 32),
+            .max_size_content = .width(jobs_w - 32),
+            .padding = .all(16),
+        });
+        defer inner.deinit();
+
+        {
+            var top = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer top.deinit();
+            dvui.labelNoFmt(@src(), "Jobs", .{}, .{ .font = .theme(.title), .gravity_y = 0.5 });
+            if (dvui.button(@src(), "Clear finished", .{}, .{ .gravity_x = 1, .gravity_y = 0.5 })) app.board.clearFinished();
+        }
+
+        var buf: [jobs.capacity]jobs.View = undefined;
+        const views = app.board.snapshot(&buf);
+        if (views.len == 0) {
+            dvui.labelNoFmt(@src(), "Nothing running. Downloads, unpacking and setup show here.", .{}, .{ .margin = .{ .y = 12 }, .max_size_content = .width(jobs_w - 32) });
+            return;
+        }
+        for (views) |*v| {
+            var job_card = dvui.box(@src(), .{}, .{
+                .id_extra = v.id,
+                .expand = .horizontal,
+                .margin = .{ .y = 12 },
+                .padding = .all(10),
+                .corners = .all(8),
+                .background = true,
+                .border = .all(1),
+            });
+            defer job_card.deinit();
+            dvui.labelNoFmt(@src(), v.title(), .{}, .{ .font = .theme(.heading), .max_size_content = .width(jobs_w - 60) });
+            var line_buf: [jobs.text_len + 32]u8 = undefined;
+            const line = if (v.detail().len > 0)
+                std.fmt.bufPrint(&line_buf, "{s}: {s}", .{ v.step.label(), v.detail() }) catch v.step.label()
+            else
+                v.step.label();
+            var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
+            tl.addText(line, .{});
+            tl.deinit();
+            if (v.step.finished()) continue;
+            if (v.fraction()) |f| {
+                dvui.progress(@src(), .{ .percent = f }, .{ .expand = .horizontal, .min_size_content = .height(6), .margin = .{ .y = 6 } });
+                if (v.step == .downloading or v.step == .unpacking) {
+                    var size_buf: [64]u8 = undefined;
+                    dvui.labelNoFmt(@src(), model.sizeText(&size_buf, v.done_units, v.total_units), .{}, .{});
+                }
+            }
+        }
     }
 
     fn grid(app: *App, lib: *Library) void {
@@ -501,13 +596,38 @@ fn freeSelection(gpa: Allocator, sel: *Selection) void {
     gpa.destroy(sel);
 }
 
+fn endJob(job: ?jobs.Job, ok: bool, comptime fmt: []const u8, args: anytype) void {
+    const j = job orelse return;
+    var buf: [jobs.text_len]u8 = undefined;
+    const text = std.fmt.bufPrint(&buf, fmt, args) catch "";
+    if (ok) j.finish(text) else j.fail(text);
+}
+
+fn wake(ctx: ?*anyopaque) void {
+    const win: *dvui.Window = @ptrCast(@alignCast(ctx.?));
+    dvui.refresh(win, @src(), null);
+}
+
+fn steamStep(phase: steam_install.Phase) jobs.Step {
+    return switch (phase) {
+        .queued, .paused => .waiting_for_steam,
+        .downloading => .downloading,
+        .finishing => .installing,
+        .installed => .done,
+    };
+}
+
 fn scanWorker(app: *App) void {
     defer app.scanning.store(false, .release);
+    const job = app.board.start(.scanning, "Library");
+    var count: usize = 0;
+    defer endJob(job, true, "{d} games", .{count});
     const lib = app.gpa.create(Library) catch return;
     lib.* = .{ .arena = .init(app.gpa) };
     const a = lib.arena.allocator();
 
     lib.games = library.scan(a, app.io, app.env) catch &.{};
+    count = lib.games.len;
     cache.save(app.gpa, app.io, app.env, lib.games) catch {};
     lib.art = readArt(a, app.io, lib.games) catch {
         freeLibrary(app.gpa, lib);
@@ -545,39 +665,65 @@ fn protonWorker(app: *App) void {
     defer arena_state.deinit();
     const a = arena_state.allocator();
 
-    const home = app.env.get("HOME") orelse return;
-    const locations = steam.locate(a, app.io, home) catch return;
-    if (locations.len == 0) return app.post("GE-Proton installs into Steam's compatibilitytools.d, and no Steam install was found", .{});
-    app.post("Downloading the latest GE-Proton…", .{});
-    const done = ge_proton.install(a, app.gpa, app.io, locations[0].root) catch |err| {
-        return app.post("GE-Proton: {s}", .{ge_proton.explain(err) orelse @errorName(err)});
+    const job = app.board.start(.queued, "GE-Proton");
+    const home = app.env.get("HOME") orelse return endJob(job, false, "HOME is not set", .{});
+    const locations = steam.locate(a, app.io, home) catch return endJob(job, false, "could not read Steam's folders", .{});
+    if (locations.len == 0) {
+        endJob(job, false, "no Steam install was found", .{});
+        return app.post("GE-Proton installs into Steam's compatibilitytools.d, and no Steam install was found", .{});
+    }
+    const done = ge_proton.install(a, app.gpa, app.io, locations[0].root, job) catch |err| {
+        const why = ge_proton.explain(err) orelse @errorName(err);
+        endJob(job, false, "{s}", .{why});
+        return app.post("GE-Proton: {s}", .{why});
     };
+    endJob(job, true, "installed in compatibilitytools.d", .{});
     app.post("{s} is installed; choose it under Runner (restart Steam to see it there too)", .{done.tag});
     app.startScan();
 }
 
 fn steamInstallWorker(app: *App) void {
     defer app.following_steam.store(false, .release);
-    const home = app.env.get("HOME") orelse return;
+    const job = app.board.start(.waiting_for_steam, "Proton Experimental");
+    app.steam_job = job;
+    const home = app.env.get("HOME") orelse return endJob(job, false, "HOME is not set", .{});
     steam_client.requestInstall(app.io, steam_client.proton_experimental_app_id) catch {
+        endJob(job, false, "Steam did not start", .{});
         return app.post("Could not start Steam to install Proton", .{});
     };
-    const outcome = steam_install.follow(app.gpa, app.io, home, steam_client.proton_experimental_app_id, app, reportSteamProgress) catch return;
+    const outcome = steam_install.follow(app.gpa, app.io, home, steam_client.proton_experimental_app_id, app, reportSteamProgress) catch {
+        return endJob(job, false, "stopped following Steam", .{});
+    };
     switch (outcome) {
         .installed => {
+            endJob(job, true, "installed by Steam", .{});
             app.post("Proton Experimental is installed", .{});
             app.startScan();
         },
-        .never_started => app.post("Steam has not started installing Proton; open Steam's Downloads page", .{}),
-        .stopped => {},
+        .never_started => {
+            endJob(job, false, "Steam has not started the install", .{});
+            app.post("Steam has not started installing Proton; open Steam's Downloads page", .{});
+        },
+        .stopped => endJob(job, false, "the window closed", .{}),
     }
 }
 
 fn reportSteamProgress(app: *App, now: ?steam_install.Progress) bool {
-    app.mutex.lockUncancelable(app.io);
-    defer app.mutex.unlock(app.io);
-    if (app.closing) return false;
-    if (now) |p| app.steam_progress = p;
+    {
+        app.mutex.lockUncancelable(app.io);
+        defer app.mutex.unlock(app.io);
+        if (app.closing) return false;
+        if (now) |p| app.steam_progress = p;
+    }
+    if (now) |p| {
+        if (app.steam_job) |j| {
+            if (p.phase != .installed) {
+                var buf: [128]u8 = undefined;
+                j.step(steamStep(p.phase), steam_install.describe(&buf, p));
+                j.progress(p.done_bytes, p.total_bytes);
+            }
+        }
+    }
     dvui.refresh(app.win, @src(), null);
     return true;
 }
@@ -590,13 +736,18 @@ fn installWorker(app: *App) void {
 
     const pinned = opti_releases.parse(a, opti_releases.builtin_table) catch return;
     const release = opti_releases.newest(pinned) orelse return;
-    app.post("Downloading OptiScaler {s}…", .{release.tag});
-    const dir = opti_install.install(app.gpa, a, app.io, app.env, release) catch |err| {
-        return app.post("OptiScaler: {s}", .{opti_install.explain(err) orelse @errorName(err)});
+    var title_buf: [64]u8 = undefined;
+    const job = app.board.start(.queued, std.fmt.bufPrint(&title_buf, "OptiScaler {s}", .{release.tag}) catch "OptiScaler");
+    const dir = opti_install.install(app.gpa, a, app.io, app.env, release, job) catch |err| {
+        const why = opti_install.explain(err) orelse @errorName(err);
+        endJob(job, false, "{s}", .{why});
+        return app.post("OptiScaler: {s}", .{why});
     };
     settings_mod.save(app.gpa, app.io, app.env, .{ .optiscaler_dir = dir }) catch |err| {
+        endJob(job, false, "the setting was not saved", .{});
         return app.post("OptiScaler installed, but the setting was not saved: {s}", .{@errorName(err)});
     };
+    endJob(job, true, "ready", .{});
     app.post("OptiScaler {s} is ready", .{release.tag});
 }
 
@@ -612,20 +763,32 @@ fn launchWorker(app: *App, id: []u8) void {
         else => return app.post("That game is no longer installed", .{}),
     };
     const c = choices_mod.load(a, app.io, app.config_dir, id) catch Choices{};
-    const prepared = launcher.prepare(a, app.io, app.env, game, c, .{}) catch |err| {
-        return app.post("{s}: {s}", .{ game.name, compose.explain(err) orelse @errorName(err) });
+    const job = app.board.start(.launching, game.name);
+    const prepared = launcher.prepare(a, app.io, app.env, game, c, .{ .job = job }) catch |err| {
+        const why = compose.explain(err) orelse @errorName(err);
+        endJob(job, false, "{s}", .{why});
+        return app.post("{s}: {s}", .{ game.name, why });
     };
-    const log_path = launcher.logPath(a, app.env, game.id) catch return;
+    const log_path = launcher.logPath(a, app.env, game.id) catch return endJob(job, false, "no log path", .{});
+    jobs.step(job, .running, prepared.runner_name);
     app.post("Starting {s} with {s}", .{ game.name, prepared.runner_name });
     const term = launcher.start(app.gpa, app.io, app.env, game, prepared.plan, log_path) catch |err| {
-        return app.post("{s}: {s}", .{ game.name, compose.explain(err) orelse @errorName(err) });
+        const why = compose.explain(err) orelse @errorName(err);
+        endJob(job, false, "{s}", .{why});
+        return app.post("{s}: {s}", .{ game.name, why });
     };
     switch (term) {
-        .exited => |code| if (code == 0)
-            app.post("{s} closed", .{game.name})
-        else
-            app.post("{s} exited with code {d}; the log is {s}", .{ game.name, code, log_path }),
-        else => app.post("{s} ended abnormally; the log is {s}", .{ game.name, log_path }),
+        .exited => |code| if (code == 0) {
+            endJob(job, true, "closed", .{});
+            app.post("{s} closed", .{game.name});
+        } else {
+            endJob(job, false, "exited with code {d}; the log is {s}", .{ code, log_path });
+            app.post("{s} exited with code {d}; the log is {s}", .{ game.name, code, log_path });
+        },
+        else => {
+            endJob(job, false, "ended abnormally; the log is {s}", .{log_path});
+            app.post("{s} ended abnormally; the log is {s}", .{ game.name, log_path });
+        },
     }
 }
 
@@ -661,6 +824,7 @@ pub fn run(gpa: Allocator, io: Io, env: *const Environ.Map) !void {
         .env = env,
         .win = &win,
         .config_dir = try paths.dir(config_arena.allocator(), env, .config),
+        .board = .{ .io = io, .notify = .{ .ctx = &win, .func = wake } },
     };
     defer app.shutdown();
     app.lib = cachedLibrary(gpa, io, env);
