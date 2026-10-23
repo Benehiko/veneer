@@ -97,8 +97,10 @@ dependency.
 - **Platform:** an explicit compat-tool mapping means Windows (a Steam Linux
   Runtime mapping means Linux); otherwise a Linux entry in `oslist` means
   native; otherwise Windows.
-- **Cover art:** `appcache/librarycache/<appid>/library_600x900.jpg`, then
-  the older flat names, then `header.jpg`.
+- **Cover art:** under `appcache/librarycache`, the first of
+  `library_600x900.jpg`, `library_capsule.jpg`, `library_header.jpg` and
+  `header.jpg` found in `<appid>/`, the older flat `<appid>_<name>`, or a
+  hashed subfolder of `<appid>/`, which newer Steam clients use.
 - **Added games:** the executable's header decides the platform (`MZ` is
   Windows; ELF or `#!` is Linux). The id is a hash of the path.
 

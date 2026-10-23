@@ -213,19 +213,43 @@ fn scanLibrary(
     }
 }
 
+const art_names = [_][]const u8{ "library_600x900.jpg", "library_capsule.jpg", "library_header.jpg", "header.jpg" };
+
 fn artPath(arena: Allocator, io: Io, root: []const u8, app_id: []const u8) !?[]const u8 {
-    const candidates = [_][]const u8{
-        try std.fmt.allocPrint(arena, "{s}/library_600x900.jpg", .{app_id}),
-        try std.fmt.allocPrint(arena, "{s}_library_600x900.jpg", .{app_id}),
-        try std.fmt.allocPrint(arena, "{s}/header.jpg", .{app_id}),
-        try std.fmt.allocPrint(arena, "{s}_header.jpg", .{app_id}),
-    };
-    for (candidates) |name| {
-        const path = try std.fs.path.join(arena, &.{ root, "appcache", "librarycache", name });
-        Io.Dir.cwd().access(io, path, .{}) catch continue;
-        return path;
+    const cache = try std.fs.path.join(arena, &.{ root, "appcache", "librarycache" });
+    const app_dir = try std.fs.path.join(arena, &.{ cache, app_id });
+    const subdirs = try artSubdirs(arena, io, app_dir);
+    for (art_names) |name| {
+        const flat = try std.fmt.allocPrint(arena, "{s}/{s}_{s}", .{ cache, app_id, name });
+        const candidates = [_][]const u8{ try std.fs.path.join(arena, &.{ app_dir, name }), flat };
+        for (candidates) |path| {
+            Io.Dir.cwd().access(io, path, .{}) catch continue;
+            return path;
+        }
+        for (subdirs) |sub| {
+            const path = try std.fs.path.join(arena, &.{ app_dir, sub, name });
+            Io.Dir.cwd().access(io, path, .{}) catch continue;
+            return path;
+        }
     }
     return null;
+}
+
+fn artSubdirs(arena: Allocator, io: Io, app_dir: []const u8) ![]const []const u8 {
+    var dir = Io.Dir.cwd().openDir(io, app_dir, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+    var names: std.ArrayList([]const u8) = .empty;
+    var it = dir.iterate();
+    while (it.next(io) catch null) |entry| {
+        if (entry.kind != .directory) continue;
+        try names.append(arena, try arena.dupe(u8, entry.name));
+    }
+    std.mem.sort([]const u8, names.items, {}, lessThanStr);
+    return names.items;
+}
+
+fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
+    return std.mem.lessThan(u8, a, b);
 }
 
 const testing = std.testing;
@@ -283,6 +307,26 @@ test "Windows-style launch paths join onto the install directory" {
     defer arena.deinit();
     const p = try joinGamePath(arena.allocator(), "/lib/common/Game", "\\bin\\x64\\game.exe");
     try testing.expectEqualStrings("/lib/common/Game/bin/x64/game.exe", p);
+}
+
+test "cover art prefers portrait art, in the app folder or a hashed subfolder, over a header" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const root = try tmp.dir.realPathFileAlloc(test_io, ".", a);
+
+    try tmp.dir.createDirPath(test_io, "appcache/librarycache/20/0f3a9c");
+    try tmp.dir.writeFile(test_io, .{ .sub_path = "appcache/librarycache/20/header.jpg", .data = "" });
+    try tmp.dir.writeFile(test_io, .{ .sub_path = "appcache/librarycache/20/0f3a9c/library_600x900.jpg", .data = "" });
+    try tmp.dir.writeFile(test_io, .{ .sub_path = "appcache/librarycache/30_header.jpg", .data = "" });
+
+    const hashed = (try artPath(a, test_io, root, "20")).?;
+    try testing.expect(std.mem.endsWith(u8, hashed, "librarycache/20/0f3a9c/library_600x900.jpg"));
+    const flat = (try artPath(a, test_io, root, "30")).?;
+    try testing.expect(std.mem.endsWith(u8, flat, "librarycache/30_header.jpg"));
+    try testing.expect(try artPath(a, test_io, root, "40") == null);
 }
 
 test "scan finds installed games across libraries listed by the root, once each" {
