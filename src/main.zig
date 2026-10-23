@@ -95,6 +95,7 @@ test {
     _ = @import("launch/steam_overlay.zig");
     _ = @import("runner/ge_proton.zig");
     _ = @import("runner/steam_install.zig");
+    _ = @import("runner/steam_runtime.zig");
     _ = @import("runner/translators.zig");
     _ = @import("jobs.zig");
     _ = @import("download.zig");

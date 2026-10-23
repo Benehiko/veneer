@@ -47,6 +47,7 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/runner/proton.zig` | Proton discovery and Steam's tool aliases |
 | `src/runner/ge_proton.zig` | GE-Proton download, digest check and safe unpacking of `.tar.gz` and `.tar.zst` |
 | `src/runner/steam_install.zig` | following an install Steam runs, through its app manifest |
+| `src/runner/steam_runtime.zig` | the Steam Linux Runtime a Proton build asks for, and its entry point |
 | `src/runner/translators.zig` | DXVK and VKD3D-Proton in Veneer's own Wine prefixes |
 | `src/jobs.zig` | the job board: each download, unpack, setup and launch, its step and progress |
 | `src/download.zig` | HTTPS downloads that stream to a file, hash as they go, and report bytes |
@@ -115,7 +116,16 @@ dependency.
 
 Steam games run as Steam runs them: the `proton` script with
 `waitforexitandrun` and the `STEAM_COMPAT_*` variables, in the game's own
-`compatdata` prefix. Veneer also sets what Steam sets for its overlay:
+`compatdata` prefix. `STEAM_COMPAT_SHADER_PATH` and
+`STEAM_COMPAT_TRANSCODED_MEDIA_PATH` name the library's
+`shadercache/<appid>`, and `STEAM_COMPAT_MEDIA_PATH` its `fozmediav1`, so
+Proton plays the game's videos from Steam's transcoded copies. A Proton
+build whose `toolmanifest.vdf` sets `require_tool_appid` runs inside that
+Steam Linux Runtime: Veneer finds the runtime's app manifest in any
+library, prefixes the runtime manifest's `commandline` (such as
+`_v2-entry-point --verb=waitforexitandrun --`), and sets
+`STEAM_COMPAT_TOOL_PATHS` to Proton's directory and the runtime's. If the
+runtime is not installed, Veneer warns and runs Proton without it. Veneer also sets what Steam sets for its overlay:
 both `gameoverlayrenderer.so` builds in `LD_PRELOAD` (after any the player
 already has), `SteamOverlayGameId`, and
 `ENABLE_VK_LAYER_VALVE_steam_overlay_1=1` for Steam's Vulkan overlay layer. Games Steam does not own get a prefix under
@@ -166,7 +176,9 @@ renames the build into Steam's `compatibilitytools.d`.
 
 Two choices reach gamescope: **Display** (normal or gamescope fullscreen)
 and **Upscaling** (FSR 1 or NIS, with a render scale of 100, 77, 67, 59 or
-50 %). FSR and NIS imply gamescope. Veneer lists each connected output and
+50 %). FSR and NIS imply gamescope. Only they shrink the game's window;
+with OptiScaler the game gets the full output size and OptiScaler alone
+upscales. Veneer lists each connected output and
 its modes from `/sys/class/drm/card*-*/`. By default the output size is the
 preferred mode of the largest output; the advanced **Resolution** choice
 sets it outright, and `--size` overrides both. Veneer does not choose the

@@ -21,6 +21,13 @@ pub const Choices = struct {
     pub fn usesGamescope(self: Choices) bool {
         return self.display == .gamescope or self.upscaling == .fsr or self.upscaling == .nis;
     }
+
+    pub fn gamescopeScale(self: Choices) u8 {
+        return switch (self.upscaling) {
+            .fsr, .nis => self.render_scale,
+            .off, .optiscaler => 100,
+        };
+    }
 };
 
 pub const setting_keys = [_][]const u8{ "runner", "display", "resolution", "upscaling", "scale", "hdr", "env", "args", "gamescope-args" };
@@ -158,6 +165,13 @@ test "choices survive a save and load, and an absent file means defaults" {
     try testing.expectEqual(@as(u8, 67), back.render_scale);
     try testing.expectEqualStrings("DXVK_HUD=fps", back.env[0]);
     try testing.expectEqualStrings("auto", back.runner);
+}
+
+test "gamescope shrinks the game only when gamescope itself upscales" {
+    try testing.expectEqual(@as(u8, 67), (Choices{ .upscaling = .fsr, .render_scale = 67 }).gamescopeScale());
+    try testing.expectEqual(@as(u8, 67), (Choices{ .upscaling = .nis, .render_scale = 67 }).gamescopeScale());
+    try testing.expectEqual(@as(u8, 100), (Choices{ .upscaling = .optiscaler, .render_scale = 67 }).gamescopeScale());
+    try testing.expectEqual(@as(u8, 100), (Choices{ .upscaling = .off, .render_scale = 67 }).gamescopeScale());
 }
 
 test "settings apply one assignment at a time and reject bad values" {

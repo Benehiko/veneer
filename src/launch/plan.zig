@@ -14,6 +14,13 @@ pub const Proton = struct {
     steam_root: []const u8,
     install_path: ?[]const u8 = null,
     library: ?[]const u8 = null,
+    shader_cache: ?[]const u8 = null,
+    runtime: ?Runtime = null,
+};
+
+pub const Runtime = struct {
+    dir: []const u8,
+    argv: []const []const u8,
 };
 
 pub const Wine = struct {
@@ -76,11 +83,21 @@ pub fn build(arena: Allocator, in: Input) BuildError!Plan {
     switch (in.runner) {
         .native => |n| if (n.runtime) |rt| try argv.append(arena, rt),
         .proton => |p| {
+            if (p.runtime) |rt| {
+                try argv.appendSlice(arena, rt.argv);
+                const tool_dir = std.fs.path.dirname(p.script) orelse p.script;
+                try env.append(arena, .{ .name = "STEAM_COMPAT_TOOL_PATHS", .value = try std.fmt.allocPrint(arena, "{s}:{s}", .{ tool_dir, rt.dir }) });
+            }
             try argv.appendSlice(arena, &.{ p.script, proton_verb });
             try env.append(arena, .{ .name = "STEAM_COMPAT_DATA_PATH", .value = p.compat_data });
             try env.append(arena, .{ .name = "STEAM_COMPAT_CLIENT_INSTALL_PATH", .value = p.steam_root });
             if (p.install_path) |v| try env.append(arena, .{ .name = "STEAM_COMPAT_INSTALL_PATH", .value = v });
             if (p.library) |v| try env.append(arena, .{ .name = "STEAM_COMPAT_LIBRARY_PATHS", .value = v });
+            if (p.shader_cache) |v| {
+                try env.append(arena, .{ .name = "STEAM_COMPAT_SHADER_PATH", .value = v });
+                try env.append(arena, .{ .name = "STEAM_COMPAT_TRANSCODED_MEDIA_PATH", .value = v });
+                try env.append(arena, .{ .name = "STEAM_COMPAT_MEDIA_PATH", .value = try std.fs.path.join(arena, &.{ v, "fozmediav1" }) });
+            }
         },
         .wine => |w| {
             try argv.append(arena, w.binary);
@@ -245,6 +262,7 @@ test "a Proton plan runs wrappers, the script and verb, then the game and its ar
             .steam_root = "/steam",
             .install_path = "/lib/common/G",
             .library = "/lib",
+            .shader_cache = "/lib/shadercache/42",
         } },
     });
     const want = [_][]const u8{ "gamescope", "-f", "--", "/steam/common/Proton 10.0/proton", proton_verb, "/lib/common/G/g.exe", "-dx12" };
@@ -253,6 +271,29 @@ test "a Proton plan runs wrappers, the script and verb, then the game and its ar
     try testing.expectEqualStrings("/lib/compatdata/42", envOf(p, "STEAM_COMPAT_DATA_PATH").?);
     try testing.expectEqualStrings("42", envOf(p, "STEAM_COMPAT_APP_ID").?);
     try testing.expectEqualStrings("42", envOf(p, "SteamAppId").?);
+    try testing.expectEqualStrings("/lib/shadercache/42", envOf(p, "STEAM_COMPAT_SHADER_PATH").?);
+    try testing.expectEqualStrings("/lib/shadercache/42", envOf(p, "STEAM_COMPAT_TRANSCODED_MEDIA_PATH").?);
+    try testing.expectEqualStrings("/lib/shadercache/42/fozmediav1", envOf(p, "STEAM_COMPAT_MEDIA_PATH").?);
+}
+
+test "Proton runs inside the Steam Linux Runtime when it needs one, which may reach Proton's directory" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const p = try build(arena.allocator(), .{
+        .exe = "/lib/common/G/g.exe",
+        .workdir = "/lib/common/G",
+        .wrappers = &.{ "gamescope", "--" },
+        .runner = .{ .proton = .{
+            .script = "/steam/common/Proton - Experimental/proton",
+            .compat_data = "/lib/compatdata/42",
+            .steam_root = "/steam",
+            .runtime = .{ .dir = "/lib/common/SLR", .argv = &.{ "/lib/common/SLR/_v2-entry-point", "--verb=waitforexitandrun", "--" } },
+        } },
+    });
+    const want = [_][]const u8{ "gamescope", "--", "/lib/common/SLR/_v2-entry-point", "--verb=waitforexitandrun", "--", "/steam/common/Proton - Experimental/proton", proton_verb, "/lib/common/G/g.exe" };
+    try testing.expectEqual(want.len, p.argv.len);
+    for (want, p.argv) |w, a| try testing.expectEqualStrings(w, a);
+    try testing.expectEqualStrings("/steam/common/Proton - Experimental:/lib/common/SLR", envOf(p, "STEAM_COMPAT_TOOL_PATHS").?);
 }
 
 test "with injection the runner starts the injector, which learns the game from its environment" {
