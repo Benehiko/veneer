@@ -12,7 +12,7 @@
       ];
       forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
 
-      depsHash = nixpkgs.lib.fakeHash;
+      depsHash = "sha256-srIsJT0GiTdHKbU0E/vwdAk3ETGj7L66mFI/PShebcw=";
       version = "0.0.0-${self.shortRev or self.dirtyShortRev or "unknown"}";
     in
     {
@@ -23,8 +23,8 @@
           src = pkgs.lib.cleanSource ./.;
 
           deps = pkgs.stdenvNoCC.mkDerivation {
-            pname = "veneer-zig-deps";
-            inherit version src;
+            name = "veneer-zig-deps";
+            inherit src;
             nativeBuildInputs = [ zig ];
             dontConfigure = true;
             dontInstall = true;

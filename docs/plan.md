@@ -58,7 +58,7 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
 | M6 Hooks | yes | overlay blocked by the build sandbox; not yet run on a desktop |
 | M7 OptiScaler | yes | download, verify, unpack and staging checked with v0.9.4; not yet in a game |
 | M8 Runners | yes | GE-Proton download checked end to end; install progress, DXVK and VKD3D-Proton unit-tested only |
-| M9 Release | `.desktop`, icon, `make install`, `make release`, Nix package, user guide | the Nix deps hash is unset; `make release` not yet run |
+| M9 Release | `.desktop`, icon, `make install`, `make release`, Nix package, user guide | Nix dependencies fetch; the full Nix build and `make release` not yet run |
 
 ## Done
 
@@ -128,8 +128,8 @@ Each needs a display, a GPU, or mount rights the build sandbox lacks.
 
 ### Build
 
-- [ ] **Nix package (M9):** set `depsHash` in `flake.nix` from the first
-      `nix build`, then check the package opens the window.
+- [ ] **Nix package (M9):** the dependencies fetch; check `nix build`
+      finishes and the package opens the window.
 - [ ] **First release (M9):** tag a version and run `make release` with the
       signing key.
 - [ ] **ROCm rules (M5):** add one when a sourced ROCm requirement for
