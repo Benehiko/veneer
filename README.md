@@ -11,6 +11,10 @@ and gone when the game exits.
 **Status: pre-alpha.** See [docs/plan.md](docs/plan.md#status) for what has
 been verified on real games.
 
+**Download: [the latest release](https://github.com/Benehiko/veneer/releases/latest)**,
+signed with cosign; the [user guide](docs/guides/using-veneer.md#install)
+says how to verify and install it.
+
 **Guides: <https://benehiko.github.io/veneer/>**, rendered from
 [docs/guides/](docs/guides/README.md).
 

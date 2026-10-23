@@ -58,7 +58,7 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
 | M6 Hooks | yes | overlay blocked by the build sandbox; not yet run on a desktop |
 | M7 OptiScaler | yes | download, verify, unpack and staging checked with v0.9.4; not yet in a game |
 | M8 Runners | yes | GE-Proton download checked end to end; install progress, DXVK and VKD3D-Proton unit-tested only |
-| M9 Release | `.desktop`, icon, `make install`, `make release`, Nix package, user guide | `nix build` succeeds; the Nix package's window and `make release` not yet run |
+| M9 Release | `.desktop`, icon, `make install`, `make release`, Nix package, user guide | `nix build` succeeds; v0.1.0 released with `make release` and `make publish`; the Nix package's window not yet run |
 
 ## Done
 
@@ -91,7 +91,9 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
 - **Release:** `.desktop` entry and icon installed by `zig build`;
   `make tag`, `make release` and `make publish`, with reproducible tarballs,
   split debug symbols and a cosign signature over `SHA256SUMS`; a Nix package that fetches its Zig dependencies ahead of the
-  build; a [user guide](guides/using-veneer.md).
+  build; a [user guide](guides/using-veneer.md);
+  [v0.1.0](https://github.com/Benehiko/veneer/releases/tag/v0.1.0), the
+  first signed release.
 - **Window:** dvui with Inter; library grid with cover art and search; game
   page with Runner, Display, Upscaling, render scale, HDR and Advanced;
   verdicts beside Play; Add game, Rescan, Download OptiScaler, Download
@@ -134,8 +136,6 @@ Each needs a display, a GPU, or mount rights the build sandbox lacks.
 - [ ] **Nix package (M9):** `nix build` succeeds; check the package
       opens the window on NixOS. On Arch it cannot: Nix's Vulkan loader
       finds no usable host driver.
-- [ ] **First release (M9):** tag a version and run `make release` with the
-      signing key.
 - [ ] **ROCm rules (M5):** add one when a sourced ROCm requirement for
       games turns up; none was found.
 
