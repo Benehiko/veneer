@@ -369,6 +369,14 @@ Vulkan variables would pass on to every game Veneer starts, and
 `build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
 to `lib.fakeHash`, run `nix build`, and copy the hash Nix reports.
 
+Nixpkgs patches Zig to detect the native target from Nix's `env`, so a
+build in `nix develop` would ask for Nix's dynamic loader. That loader does
+not search `/usr/lib`, and SDL then finds neither Wayland nor X11. When
+`IN_NIX_SHELL` is set, the native loader lies under `/nix/store` and
+`/etc/NIXOS` is absent, `build.zig` resolves the target as an explicit
+`<arch>-linux-gnu`, as `make release` does, which uses the host's
+standard loader.
+
 ## Website
 
 <https://benehiko.github.io/veneer/> is built from `docs/guides/` alone;
