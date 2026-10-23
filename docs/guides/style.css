@@ -18,24 +18,6 @@
   --measure: 70ch;
 }
 
-:root:not([data-theme="dark"]) {
-  @media (prefers-color-scheme: light) {
-    --ground:    #f6efdc;
-    --raised:    #ebe1c6;
-    --text:      #1b1033;
-    --accent:    #c2008f;
-    --accent-lit:#8f006a;
-    --neon:      #00708f;
-    --coin:      #9a6a00;
-    --muted:     #5b4f73;
-    --rule:      #d6c9a6;
-    --syn-string:#1f7a35;
-    --syn-number:#a34a00;
-    --glow:      0 0 0;
-    --scanline:  rgba(60, 30, 90, 0.05);
-  }
-}
-
 :root[data-theme="light"] {
   --ground:    #f6efdc;
   --raised:    #ebe1c6;

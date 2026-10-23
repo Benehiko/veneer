@@ -8,8 +8,7 @@
   } catch (e) {}
 
   function current() {
-    if (root.dataset.theme) return root.dataset.theme;
-    return matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    return root.dataset.theme === "light" ? "light" : "dark";
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -31,8 +30,6 @@
       try { localStorage.setItem(KEY, next); } catch (e) {}
       sync();
     });
-
-    matchMedia("(prefers-color-scheme: light)").addEventListener("change", sync);
 
     sync();
     bar.appendChild(button);
