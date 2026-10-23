@@ -17,6 +17,7 @@ const rules = @import("../compat/rules.zig");
 const launcher = @import("../launch/launcher.zig");
 const compose = @import("../launch/compose.zig");
 const gamescope = @import("../launch/gamescope.zig");
+const display = @import("../launch/display.zig");
 const model = @import("model.zig");
 const cache = @import("../library/cache.zig");
 const settings_mod = @import("../config/settings.zig");
@@ -28,6 +29,7 @@ const ge_proton = @import("../runner/ge_proton.zig");
 const steam_install = @import("../runner/steam_install.zig");
 const theme = @import("theme.zig");
 const jobs = @import("../jobs.zig");
+const stop_mod = @import("../launch/stop.zig");
 
 const card_w = 160;
 const card_h = 240;
@@ -41,6 +43,7 @@ const Library = struct {
     art: []const ?[]const u8 = &.{},
     tools: []const []const u8 = &.{},
     facts: facts_mod.Facts = .{},
+    outputs: []const display.Output = &.{},
     table: []const rules.Rule = &.{},
     probed: bool = false,
 };
@@ -100,6 +103,10 @@ const App = struct {
     jobs_open: bool = false,
     toggle_jobs: bool = false,
     launches: std.StringHashMapUnmanaged(u32) = .empty,
+    notices: std.ArrayList([]const u8) = .empty,
+    notice_seq: usize = 0,
+    stopping: std.atomic.Value(bool) = .init(false),
+    stopped: std.StringHashMapUnmanaged(void) = .empty,
 
     fn startSteamProtonInstall(app: *App) void {
         if (app.following_steam.swap(true, .acq_rel)) return;
@@ -142,10 +149,49 @@ const App = struct {
         app.mutex.lockUncancelable(app.io);
         defer app.mutex.unlock(app.io);
         if (app.closing) return;
-        var buf: [512]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, fmt, args) catch return;
+        const msg = std.fmt.allocPrint(app.gpa, fmt, args) catch return;
+        app.notices.append(app.gpa, msg) catch {
+            app.gpa.free(msg);
+            return;
+        };
         dvui.refresh(app.win, @src(), null);
-        dvui.toast(@src(), .{ .window = app.win, .message = msg });
+    }
+
+    fn startStop(app: *App, game: Game, live: bool) void {
+        if (app.stopping.swap(true, .acq_rel)) return;
+        const id = app.gpa.dupe(u8, game.id) catch return app.stopping.store(false, .release);
+        const name = app.gpa.dupe(u8, game.name) catch {
+            app.gpa.free(id);
+            return app.stopping.store(false, .release);
+        };
+        if (live and !app.stopped.contains(id)) {
+            if (app.gpa.dupe(u8, id)) |key| {
+                app.stopped.put(app.gpa, key, {}) catch app.gpa.free(key);
+            } else |_| {}
+        }
+        const t = std.Thread.spawn(.{}, stopWorker, .{ app, id, name }) catch {
+            app.gpa.free(id);
+            app.gpa.free(name);
+            return app.stopping.store(false, .release);
+        };
+        app.threads.append(app.gpa, t) catch t.detach();
+    }
+
+    fn takeStopped(app: *App, id: []const u8) bool {
+        app.mutex.lockUncancelable(app.io);
+        defer app.mutex.unlock(app.io);
+        const kv = app.stopped.fetchRemove(id) orelse return false;
+        app.gpa.free(kv.key);
+        return true;
+    }
+
+    fn showNotices(app: *App) void {
+        for (app.notices.items) |msg| {
+            app.notice_seq +%= 1;
+            dvui.toast(@src(), .{ .id_extra = app.notice_seq, .message = msg });
+            app.gpa.free(msg);
+        }
+        app.notices.clearRetainingCapacity();
     }
 
     fn shutdown(app: *App) void {
@@ -157,6 +203,11 @@ const App = struct {
         var keys = app.launches.keyIterator();
         while (keys.next()) |k| app.gpa.free(k.*);
         app.launches.deinit(app.gpa);
+        var stopped_keys = app.stopped.keyIterator();
+        while (stopped_keys.next()) |k| app.gpa.free(k.*);
+        app.stopped.deinit(app.gpa);
+        for (app.notices.items) |msg| app.gpa.free(msg);
+        app.notices.deinit(app.gpa);
         if (app.lib) |lib| freeLibrary(app.gpa, lib);
         if (app.sel) |sel| freeSelection(app.gpa, sel);
     }
@@ -263,6 +314,7 @@ const App = struct {
     fn frame(app: *App) void {
         app.mutex.lockUncancelable(app.io);
         defer app.mutex.unlock(app.io);
+        app.showNotices();
 
         var root = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
         defer root.deinit();
@@ -475,6 +527,11 @@ const App = struct {
             .margin = .{ .y = 12, .h = 12 },
         }) and !blocked and !live) app.play(game);
 
+        const stopping = app.stopping.load(.acquire);
+        if (live) {
+            if (dvui.button(@src(), if (stopping) "Stopping…" else "Stop", .{}, .{ .expand = .horizontal, .margin = .{ .h = 8 } }) and !stopping) app.startStop(game, true);
+        }
+
         if (launch) |v| {
             const status = if (v.detail().len > 0)
                 std.fmt.allocPrint(frame_arena, "{s}: {s}", .{ v.step.label(), v.detail() }) catch v.step.label()
@@ -487,6 +544,7 @@ const App = struct {
                 if (dvui.button(@src(), "Open log", .{}, .{ .margin = .{ .h = 8 } })) {
                     app.openLogs(launcher.logPath(frame_arena, app.env, game.id) catch null);
                 }
+                if (dvui.button(@src(), if (stopping) "Stopping…" else "Stop leftover processes", .{}, .{ .margin = .{ .h = 8 } }) and !stopping) app.startStop(game, false);
             }
         }
 
@@ -585,6 +643,13 @@ const App = struct {
                     }
                 }
             }
+            if (dvui.button(@src(), "Reset OptiScaler settings", .{}, .{ .expand = .horizontal }) and !live) {
+                const msg = if (compose.resetOptiScaler(frame_arena, app.io, app.env, game)) |removed|
+                    (if (removed) "OptiScaler settings reset; the next launch starts from the release's defaults" else "This game has no OptiScaler settings to reset")
+                else |err|
+                    compose.explain(err) orelse @errorName(err);
+                dvui.toast(@src(), .{ .message = msg });
+            }
         }
 
         if (sel.choices.usesGamescope()) {
@@ -592,7 +657,19 @@ const App = struct {
         }
 
         if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal, .margin = .{ .y = 12 } })) {
-            dvui.labelNoFmt(@src(), "Environment (NAME=value, space separated)", .{}, .{});
+            if (sel.choices.usesGamescope()) {
+                dvui.labelNoFmt(@src(), "Resolution", .{}, .{});
+                const sizes = model.resolutionMenu(frame_arena, lib.outputs, sel.choices.resolution) catch return;
+                var size_idx: ?usize = sizes.indexOf(sel.choices.resolution);
+                if (dvui.dropdown(@src(), sizes.labels, .{ .choice_nullable = &size_idx }, .{}, .{ .expand = .horizontal })) {
+                    if (size_idx) |k| {
+                        sel.choices.resolution = a.dupe(u8, sizes.values[k]) catch sel.choices.resolution;
+                        app.save();
+                    }
+                }
+            }
+
+            dvui.labelNoFmt(@src(), "Environment (NAME=value, space separated)", .{}, .{ .margin = .{ .y = if (sel.choices.usesGamescope()) 6 else 0 } });
             var env_te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &sel.env_buf } }, .{ .expand = .horizontal });
             const env_text = env_te.getText();
             env_te.deinit();
@@ -702,6 +779,7 @@ fn scanWorker(app: *App) void {
         } else |_| {}
     }
     lib.facts = facts_mod.probe(a, app.io) catch .{};
+    lib.outputs = display.outputs(a, app.io) catch &.{};
     lib.table = rules.parse(a, rules.builtin_table) catch &.{};
     lib.probed = true;
 
@@ -808,6 +886,24 @@ fn installWorker(app: *App) void {
     app.post("OptiScaler {s} is ready", .{release.tag});
 }
 
+fn stopWorker(app: *App, id: []u8, name: []u8) void {
+    defer app.stopping.store(false, .release);
+    defer app.gpa.free(id);
+    defer app.gpa.free(name);
+    var arena_state = std.heap.ArenaAllocator.init(app.gpa);
+    defer arena_state.deinit();
+    const a = arena_state.allocator();
+    const n = stop_mod.stop(a, app.io, compose.stopMatch(a, app.env, id) catch stop_mod.Match{ .game_id = id }) catch |err| {
+        _ = app.takeStopped(id);
+        return app.post("Could not stop {s}: {s}", .{ name, @errorName(err) });
+    };
+    if (n == 0) {
+        _ = app.takeStopped(id);
+        return app.post("Nothing of {s} is running", .{name});
+    }
+    app.post("Stopped {s} ({d} process{s})", .{ name, n, if (n == 1) "" else "es" });
+}
+
 fn launchWorker(app: *App, id: []u8, job: ?jobs.Job) void {
     defer app.gpa.free(id);
     var arena_state = std.heap.ArenaAllocator.init(app.gpa);
@@ -851,6 +947,7 @@ fn launchWorker(app: *App, id: []u8, job: ?jobs.Job) void {
         endJob(job, false, "{s}", .{why});
         return app.post("{s}: {s}", .{ game.name, why });
     };
+    if (app.takeStopped(id)) return endJob(job, true, "stopped", .{});
     switch (term) {
         .exited => |code| if (code == 0) {
             endJob(job, true, "closed", .{});

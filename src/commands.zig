@@ -14,6 +14,7 @@ const plan = @import("launch/plan.zig");
 const display = @import("launch/display.zig");
 const launcher = @import("launch/launcher.zig");
 const steam_client = @import("launch/steam_client.zig");
+const stop_mod = @import("launch/stop.zig");
 const settings_mod = @import("config/settings.zig");
 const optiscaler = @import("hooks/optiscaler.zig");
 const opti_releases = @import("optiscaler/releases.zig");
@@ -121,7 +122,9 @@ pub fn set(ctx: Ctx, args: []const []const u8) !void {
 }
 
 fn writeChoices(out: *Io.Writer, c: choices_mod.Choices) !void {
-    try out.print("  runner     {s}\n  display    {s}\n  upscaling  {s}", .{ c.runner, @tagName(c.display), @tagName(c.upscaling) });
+    try out.print("  runner     {s}\n  display    {s}\n", .{ c.runner, @tagName(c.display) });
+    if (c.usesGamescope()) try out.print("  resolution {s}\n", .{c.resolution});
+    try out.print("  upscaling  {s}", .{@tagName(c.upscaling)});
     if (c.upscaling == .fsr or c.upscaling == .nis) try out.print(" at {d}%", .{c.render_scale});
     try out.print("\n  hdr        {s}\n", .{if (c.hdr) "on" else "off"});
     if (c.args.len > 0) try out.print("  args       {s}\n", .{c.args});
@@ -186,7 +189,10 @@ pub fn doctor(ctx: Ctx) !void {
     if (f.gamescope.present) {
         try out.print("gamescope  present{s}{s}\n", .{ if (f.gamescope.filter_flag) ", -F filters" else ", old upscaler flags", if (f.gamescope.hdr) ", HDR" else "" });
     } else try out.writeAll("gamescope  not found\n");
-    if (display.nativeMode(ctx.io)) |m| try out.print("display    {d}x{d}\n", .{ m.width, m.height });
+    for (try display.outputs(ctx.arena, ctx.io)) |o| {
+        const m = o.preferred().?;
+        try out.print("display    {s} {d}x{d}, {d} modes\n", .{ o.name, m.width, m.height, o.modes.len });
+    }
 
     const found = try verdicts(ctx, f, .full);
     if (found.len == 0) {
@@ -264,6 +270,18 @@ pub fn run(ctx: Ctx, args: []const []const u8) !void {
     }
 }
 
+pub fn stop(ctx: Ctx, args: []const []const u8) !void {
+    if (args.len == 0) return fail("stop: name a game", .{});
+    const games = try library.scan(ctx.arena, ctx.io, ctx.env);
+    const game = try pick(games, args[0]);
+    const n = try stop_mod.stop(ctx.arena, ctx.io, try compose.stopMatch(ctx.arena, ctx.env, game.id));
+    if (n == 0) {
+        try ctx.out.print("{s}: nothing running\n", .{game.name});
+    } else {
+        try ctx.out.print("{s}: stopped {d} process{s}\n", .{ game.name, n, if (n == 1) "" else "es" });
+    }
+}
+
 pub fn optiscalerDir(ctx: Ctx, args: []const []const u8) !void {
     var s = try settings_mod.load(ctx.arena, ctx.io, ctx.env);
     const pinned = opti_releases.parse(ctx.arena, opti_releases.builtin_table) catch return fail("the built-in OptiScaler release table is malformed", .{});
@@ -274,6 +292,19 @@ pub fn optiscalerDir(ctx: Ctx, args: []const []const u8) !void {
             try ctx.out.print("{s} {s:<8} {s}\n", .{ if (in_use) "*" else " ", r.tag, if (installed != null) "installed" else r.fileName() });
         }
         try ctx.out.writeAll("* in use\n");
+        return;
+    }
+    if (args.len > 0 and std.mem.eql(u8, args[0], "reset")) {
+        if (args.len < 2) return fail("optiscaler reset: name a game", .{});
+        const t = try target(ctx, args[1], &.{});
+        const removed = compose.resetOptiScaler(ctx.arena, ctx.io, ctx.env, t.game) catch |err| {
+            return fail("{s}: {s}", .{ t.game.name, compose.explain(err) orelse @errorName(err) });
+        };
+        if (removed) {
+            try ctx.out.print("{s}: OptiScaler settings reset; the next launch uses the release's OptiScaler.ini\n", .{t.game.name});
+        } else {
+            try ctx.out.print("{s}: no OptiScaler settings to reset\n", .{t.game.name});
+        }
         return;
     }
     if (args.len > 0 and std.mem.eql(u8, args[0], "install")) {

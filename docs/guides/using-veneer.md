@@ -42,7 +42,7 @@ Pick a game. The page shows three choices:
 | Choice | What it does |
 | --- | --- |
 | **Runner** | Proton for Windows games, native for Linux games. Pick another Proton, a Wine binary, or download GE-Proton. |
-| **Display** | Normal, or gamescope fullscreen at your screen's resolution. |
+| **Display** | Normal, or gamescope fullscreen on the screen under your cursor. Pick the resolution under **Advanced**. |
 | **Upscaling** | Off, FSR or NIS (through gamescope, at a render scale you pick), or OptiScaler. |
 
 Press **Play**. If Veneer knows the game will fail with these choices, it
@@ -52,7 +52,12 @@ Waiting for Steam, Running), and the line below it the runner. When the
 game ends, that line says whether it closed or failed, why, and where its
 log is.
 
+**Stop** ends a game that hangs or will not close. A crashed game can leave
+Wine processes running; after a launch ends, **Stop leftover processes**
+ends them. `veneer stop <game>` does the same from the command line.
+
 Choices save as you change them. Everything else sits under **Advanced**:
+the resolution gamescope uses (by default, your largest screen's own),
 environment variables, game arguments and gamescope arguments.
 
 ## Proton

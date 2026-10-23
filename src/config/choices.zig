@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
+const display = @import("../launch/display.zig");
 
 pub const Display = enum { normal, gamescope };
 
@@ -9,6 +10,7 @@ pub const Upscaling = enum { off, fsr, nis, optiscaler };
 pub const Choices = struct {
     runner: []const u8 = "auto",
     display: Display = .normal,
+    resolution: []const u8 = "auto",
     upscaling: Upscaling = .off,
     render_scale: u8 = 77,
     hdr: bool = false,
@@ -21,7 +23,7 @@ pub const Choices = struct {
     }
 };
 
-pub const setting_keys = [_][]const u8{ "runner", "display", "upscaling", "scale", "hdr", "env", "args", "gamescope-args" };
+pub const setting_keys = [_][]const u8{ "runner", "display", "resolution", "upscaling", "scale", "hdr", "env", "args", "gamescope-args" };
 
 pub fn apply(arena: Allocator, c: Choices, assignment: []const u8) !Choices {
     const eq = std.mem.indexOfScalar(u8, assignment, '=') orelse return error.NotAnAssignment;
@@ -32,6 +34,13 @@ pub fn apply(arena: Allocator, c: Choices, assignment: []const u8) !Choices {
         out.runner = if (value.len == 0) "auto" else value;
     } else if (std.mem.eql(u8, key, "display")) {
         out.display = std.meta.stringToEnum(Display, value) orelse return error.BadValue;
+    } else if (std.mem.eql(u8, key, "resolution")) {
+        if (display.isAuto(value)) {
+            out.resolution = "auto";
+        } else {
+            const m = display.parseMode(value) orelse return error.BadValue;
+            out.resolution = try std.fmt.allocPrint(arena, "{d}x{d}", .{ m.width, m.height });
+        }
     } else if (std.mem.eql(u8, key, "upscaling")) {
         out.upscaling = std.meta.stringToEnum(Upscaling, value) orelse return error.BadValue;
     } else if (std.mem.eql(u8, key, "scale")) {
@@ -168,6 +177,12 @@ test "settings apply one assignment at a time and reject bad values" {
     try testing.expectEqualStrings("GE-Proton9-20", c.runner);
     try testing.expectEqualStrings("auto", (try apply(a, c, "runner=")).runner);
 
+    c = try apply(a, c, "resolution= 1920x1080 ");
+    try testing.expectEqualStrings("1920x1080", c.resolution);
+    try testing.expectEqualStrings("auto", (try apply(a, c, "resolution=auto")).resolution);
+    try testing.expectEqualStrings("auto", (try apply(a, c, "resolution=")).resolution);
+
+    try testing.expectError(error.BadValue, apply(a, c, "resolution=big"));
     try testing.expectError(error.BadValue, apply(a, c, "display=huge"));
     try testing.expectError(error.BadValue, apply(a, c, "scale=10"));
     try testing.expectError(error.BadValue, apply(a, c, "hdr=maybe"));

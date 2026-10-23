@@ -20,6 +20,7 @@ const settings_mod = @import("../config/settings.zig");
 const steam_overlay = @import("steam_overlay.zig");
 const translators = @import("../runner/translators.zig");
 const jobs = @import("../jobs.zig");
+const stop = @import("stop.zig");
 
 pub const Error = error{
     NoExecutable,
@@ -54,6 +55,18 @@ pub fn overlayDirs(arena: Allocator, env: *const Environ.Map, game_id: []const u
     };
 }
 
+pub fn stopMatch(arena: Allocator, env: *const Environ.Map, game_id: []const u8) !stop.Match {
+    const dirs = try overlayDirs(arena, env, game_id);
+    return stop.match(arena, game_id, dirs.upper);
+}
+
+pub fn resetOptiScaler(arena: Allocator, io: Io, env: *const Environ.Map, game: Game) !bool {
+    const exe = game.exe orelse return error.NoExecutable;
+    const exe_rel = try optiscaler.targetWithin(arena, io, game.install_dir, exe) orelse return error.ExeOutsideInstall;
+    const dirs = try overlayDirs(arena, env, game.id);
+    return optiscaler.resetSettings(arena, io, dirs.upper, exe_rel);
+}
+
 fn hooks(arena: Allocator, io: Io, env: *const Environ.Map, game: Game, runner: plan.Runner, over: Overrides) !struct { inject: ?plan.Inject, overlay: ?plan.Overlay } {
     if (over.inject_dlls.len == 0 and !over.overlay) return .{ .inject = null, .overlay = null };
     if (anticheat.detect(io, game.install_dir)) |marker| {
@@ -80,6 +93,7 @@ fn hooks(arena: Allocator, io: Io, env: *const Environ.Map, game: Game, runner: 
         const exe_rel = try optiscaler.targetWithin(arena, io, game.install_dir, game.exe.?);
         if (over.optiscaler_dir != null and exe_rel == null) return error.ExeOutsideInstall;
         if (!over.dry_run) {
+            if ((try stop.holders(arena, io, dirs.upper)).len > 0) return error.OverlayInUse;
             try Io.Dir.cwd().createDirPath(io, dirs.upper);
             try Io.Dir.cwd().createDirPath(io, dirs.work);
             if (over.optiscaler_dir) |release| try optiscaler.stage(arena, io, release, dirs.upper, exe_rel.?);
@@ -189,7 +203,7 @@ pub fn compose(
         const caps = gamescope.probe(arena, io);
         if (!caps.present) return error.NoGamescope;
         wrappers = try gamescope.argv(arena, .{
-            .output = over.output orelse display.nativeMode(io),
+            .output = over.output orelse display.size(try display.outputs(arena, io), display.parseMode(choices.resolution)),
             .render_scale = if (choices.upscaling == .off) 100 else choices.render_scale,
             .filter = switch (choices.upscaling) {
                 .fsr => .fsr,
@@ -207,6 +221,7 @@ pub fn compose(
     try args.appendSlice(arena, over.extra_args);
 
     var vars: std.ArrayList(plan.EnvVar) = .empty;
+    try vars.append(arena, .{ .name = stop.env_name, .value = game.id });
     var overridden: std.ArrayList([]const u8) = .empty;
     try overridden.appendSlice(arena, native_dlls);
     if (effective.optiscaler_dir != null) try overridden.append(arena, optiscaler.proxy_dll);
@@ -264,6 +279,7 @@ pub fn explain(err: anyerror) ?[]const u8 {
         error.ExeOutsideInstall => "the game's executable is outside its install directory, so OptiScaler cannot be layered beside it",
         error.NativeGameOnWine => "this is a Windows game: it cannot run natively",
         error.SteamNotStarted => "Steam did not start; start it yourself, then try again",
+        error.OverlayInUse => "an earlier launch of this game is still running and holds its overlay: press Stop leftover processes (or run `veneer stop <game>`), then try again",
         error.AntiCheat => "the game ships anti-cheat, so Veneer will not inject into it or layer files over it",
         error.NoInjector => "veneer-inject.exe is missing from beside the veneer binary; rebuild with `zig build`",
         error.InjectNeedsWine => "DLL injection works only for Windows games under Proton or Wine",

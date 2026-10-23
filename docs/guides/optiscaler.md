@@ -74,6 +74,9 @@ does, without the copying. For Unreal Engine games it uses
 
 Each game gets its own copy of `OptiScaler.ini`, in
 `~/.local/share/veneer/overlay/<game>/upper/`, so settings you change in one
-game stay with that game.
+game stay with that game. If a setting stops the game from starting, press
+**Reset OptiScaler settings** on the game page, or run
+`veneer optiscaler reset <game>`. Veneer deletes that game's copy, and the
+next launch starts from the release's `OptiScaler.ini`.
 
 Games with EasyAntiCheat or BattlEye are refused.
