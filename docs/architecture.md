@@ -52,7 +52,7 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/jobs.zig` | the job board: each download, unpack, setup and launch, its step and progress |
 | `src/download.zig` | HTTPS downloads that stream to a file, hash as they go, and report bytes |
 | `src/launch/steam_overlay.zig` | the variables that load Steam's overlay |
-| `src/gui/theme.zig` | Adwaita with Inter |
+| `src/gui/theme.zig` | the arcade theme, matching the website |
 | `src/config/` | per-game choices, global settings, the ZON file helper |
 | `src/launch/` | `compose`, `plan`, `gamescope`, `display`, `steam_client`, `execute`, `launcher` |
 | `src/hooks/overlay.zig` | the private overlay mount (`veneer __overlay`) |
@@ -279,9 +279,10 @@ player passes `--force`.
 **Stack:** [dvui](https://github.com/david-vanderson/dvui), pinned in
 `build.zig.zon`, on its `sdl3gpu` backend: SDL3, built from source, renders
 through SDL's GPU API (Vulkan on Linux). FreeType draws text; `stb_image`
-decodes cover art. The theme is dvui's Adwaita (light or dark, following the
-system) with Inter as its font; Inter comes from its release zip, pinned in
-`build.zig.zon`, and is embedded in the binary.
+decodes cover art. The theme matches the website's dark arcade look: its
+colors, square corners, Chakra Petch for text, Press Start 2P for titles
+and VT323 for monospace. The window is always dark. Each font comes from an
+upstream archive pinned in `build.zig.zon` and is embedded in the binary.
 
 **Wayland first.** Veneer sets `SDL_HINT_VIDEO_DRIVER` to `wayland,x11`
 before SDL starts, so it runs natively on Wayland and uses X11 only when no
@@ -348,7 +349,7 @@ the last commit's time, so the same commit gives the same bytes. It writes
 The flake's `packages.default` builds in two steps. `deps` is a
 fixed-output derivation that runs
 `zig build --pkg-dir $out -Doptimize=safe --help`. That runs the build
-script, so it fetches dvui, SDL3, Inter and the lazy packages this build
+script, so it fetches dvui, SDL3, the fonts and the lazy packages this build
 asks for, ahead of the build. `--fetch=all` would also fetch lazy packages
 Veneer never uses, and some of those carry broken hashes upstream. The package then copies them to a writable folder and builds with
 `zig build --pkg-dir` pointing there; Nix's sandbox has no network, so

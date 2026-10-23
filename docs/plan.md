@@ -16,8 +16,8 @@ leaves the install as it found it.
 
 GPL-3.0-or-later ([LICENSE](../LICENSE)), the license family of OptiScaler,
 Lutris and Heroic. Every dependency is compatible: dvui (MIT), SDL3 (zlib),
-FreeType, stb, and Inter (SIL Open Font License, shipped as
-`share/licenses/veneer/Inter-OFL.txt`).
+FreeType, stb, and the fonts Chakra Petch, Press Start 2P and VT323 (SIL
+Open Font License, shipped as `share/licenses/veneer/*-OFL.txt`).
 
 ## Principles
 

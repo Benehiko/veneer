@@ -8,9 +8,17 @@
             .url = "git+https://github.com/david-vanderson/dvui?ref=main#275c248f6a2a80f92723ac93242310e16201a49b",
             .hash = "dvui-0.6.0-dev-AQFJmWZLBAG6E9WSTCqdouXXCC8gF91z6oiLmZvh3e-5",
         },
-        .inter = .{
-            .url = "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
-            .hash = "N-V-__8AAAv-sAOXPycbcfSerQ5vsDx3k-PZC5fy2p9ScNi8",
+        .chakra_petch = .{
+            .url = "https://github.com/m4rc1e/Chakra-Petch/archive/6176529d05acf654f31e024daad77966319e499d.tar.gz",
+            .hash = "N-V-__8AAB1ZsgDrYb5oF2Z5WHkcXj2JKwVqJRhye4-8PNTr",
+        },
+        .vt323 = .{
+            .url = "https://github.com/phoikoi/VT323/archive/9bd4b3f69887fd960d51d07602db60a28a789145.tar.gz",
+            .hash = "N-V-__8AADuafAA9EsKv_S8c2ibCWh3kRsV8MTBYwCa8qJ-U",
+        },
+        .press_start_2p = .{
+            .url = "https://github.com/google-fonts-bower/pressstart2p-bower/archive/9847ac77d280b1cc9401aef867112a614c3f72f3.tar.gz",
+            .hash = "N-V-__8AAMfxAQDEAV38F_ZVZib36X38zyhkqqsGja3u-S94",
         },
     },
     .paths = .{
