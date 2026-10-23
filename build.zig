@@ -37,10 +37,16 @@ pub fn build(b: *std.Build) void {
     root.addImport("dvui", dvui_dep.module("dvui_sdl3gpu"));
     root.addImport("sdl3gpu-backend", dvui_dep.module("sdl3gpu"));
 
-    const inter = b.dependency("inter", .{});
-    root.addAnonymousImport("inter_regular", .{ .root_source_file = inter.path("extras/ttf/Inter-Regular.ttf") });
-    root.addAnonymousImport("inter_semibold", .{ .root_source_file = inter.path("extras/ttf/Inter-SemiBold.ttf") });
-    b.getInstallStep().dependOn(&b.addInstallFile(inter.path("LICENSE.txt"), "share/licenses/veneer/Inter-OFL.txt").step);
+    const chakra = b.dependency("chakra_petch", .{});
+    const vt323 = b.dependency("vt323", .{});
+    const press = b.dependency("press_start_2p", .{});
+    root.addAnonymousImport("chakra_regular", .{ .root_source_file = chakra.path("fonts/ChakraPetch-Regular.ttf") });
+    root.addAnonymousImport("chakra_semibold", .{ .root_source_file = chakra.path("fonts/ChakraPetch-SemiBold.ttf") });
+    root.addAnonymousImport("vt323", .{ .root_source_file = vt323.path("fonts/ttf/VT323-Regular.ttf") });
+    root.addAnonymousImport("press_start_2p", .{ .root_source_file = press.path("PressStart2P-Regular.ttf") });
+    b.getInstallStep().dependOn(&b.addInstallFile(chakra.path("OFL.txt"), "share/licenses/veneer/ChakraPetch-OFL.txt").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(vt323.path("OFL.txt"), "share/licenses/veneer/VT323-OFL.txt").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(press.path("OFL.txt"), "share/licenses/veneer/PressStart2P-OFL.txt").step);
     b.getInstallStep().dependOn(&b.addInstallFile(b.path("LICENSE"), "share/licenses/veneer/LICENSE").step);
     b.getInstallStep().dependOn(&b.addInstallFile(b.path("data/veneer.desktop"), "share/applications/veneer.desktop").step);
     b.getInstallStep().dependOn(&b.addInstallFile(b.path("data/veneer.svg"), "share/icons/hicolor/scalable/apps/veneer.svg").step);

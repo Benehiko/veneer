@@ -338,7 +338,7 @@ const App = struct {
         var bar = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = .all(10) });
         defer bar.deinit();
 
-        dvui.labelNoFmt(@src(), "Veneer", .{}, .{ .font = .theme(.title), .gravity_y = 0.5 });
+        dvui.labelNoFmt(@src(), "VENEER", .{}, .{ .font = .theme(.title), .style = .app1, .gravity_y = 0.5 });
         var te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &app.search }, .placeholder = "Search games" }, .{
             .expand = .horizontal,
             .gravity_y = 0.5,
@@ -396,7 +396,7 @@ const App = struct {
         {
             var top = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer top.deinit();
-            dvui.labelNoFmt(@src(), "Jobs", .{}, .{ .font = .theme(.title), .gravity_y = 0.5 });
+            dvui.labelNoFmt(@src(), "JOBS", .{}, .{ .font = .theme(.title), .style = .app2, .gravity_y = 0.5 });
             if (dvui.button(@src(), "Clear finished", .{}, .{ .gravity_x = 1, .gravity_y = 0.5 })) app.board.clearFinished();
             if (dvui.button(@src(), "Logs", .{}, .{ .gravity_x = 1, .gravity_y = 0.5 })) app.openLogs(null);
         }
@@ -466,6 +466,7 @@ const App = struct {
             .padding = .all(6),
             .corners = .all(10),
             .border = .all(if (selected) 2 else 0),
+            .color_border = if (selected) .{ .color = theme.neon } else null,
             .background = true,
             .min_size_content = .{ .w = card_w, .h = card_h + 30 },
             .max_size_content = .{ .w = card_w, .h = card_h + 30 },
@@ -527,6 +528,7 @@ const App = struct {
             .expand = .horizontal,
             .min_size_content = .height(44),
             .font = .theme(.heading),
+            .style = if (blocked) .err else .highlight,
             .margin = .{ .y = 12, .h = 12 },
         }) and !blocked and !live) app.play(game);
 
@@ -981,10 +983,7 @@ pub fn run(gpa: Allocator, io: Io, env: *const Environ.Map) !void {
 
     var window_open = true;
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
-        .theme = theme.veneer(switch (backend.preferredColorScheme() orelse .dark) {
-            .light => false,
-            .dark => true,
-        }),
+        .theme = theme.veneer(),
         .open_flag = &window_open,
     });
     defer win.deinit();
