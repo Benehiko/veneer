@@ -1,4 +1,4 @@
-.PHONY: hooks build test fmt run install uninstall tag release release-host publish clean prune-cache site serve
+.PHONY: hooks build test fmt run icon install uninstall tag release release-host publish clean prune-cache site serve
 
 hooks:
 	git config core.hooksPath .githooks
@@ -15,6 +15,11 @@ fmt:
 
 run:
 	zig build run
+
+RSVG ?= rsvg-convert
+
+icon:
+	$(RSVG) --width 256 --height 256 data/veneer.svg --output data/veneer.png
 
 PREFIX ?= $(HOME)/.local
 

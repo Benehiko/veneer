@@ -32,6 +32,7 @@ pub fn build(b: *std.Build) void {
     root.addAnonymousImport("compat_rules", .{ .root_source_file = b.path("data/compat.tsv") });
     root.addAnonymousImport("optiscaler_releases", .{ .root_source_file = b.path("data/optiscaler.tsv") });
     root.addAnonymousImport("translator_releases", .{ .root_source_file = b.path("data/translators.tsv") });
+    root.addAnonymousImport("veneer_icon", .{ .root_source_file = b.path("data/veneer.png") });
 
     const dvui_dep = b.dependency("dvui", .{ .target = target, .optimize = optimize, .backend = .sdl3gpu });
     root.addImport("dvui", dvui_dep.module("dvui_sdl3gpu"));

@@ -114,6 +114,7 @@
             pkgs.gh
             pkgs.pandoc
             pkgs.pagefind
+            pkgs.librsvg
           ];
         };
       });

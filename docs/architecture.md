@@ -66,6 +66,7 @@ of the launch tests. `execute` spawns the result and logs it.
 | `data/optiscaler.tsv` | OptiScaler releases Veneer will install, with their SHA-256 |
 | `data/translators.tsv` | DXVK and VKD3D-Proton releases Veneer will install, with their SHA-256 |
 | `data/veneer.desktop`, `data/veneer.svg` | the desktop entry and icon |
+| `data/veneer.png` | the icon at 256 px, embedded as the window icon; `make icon` renders it from the SVG |
 
 ## Where Veneer keeps its files
 

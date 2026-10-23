@@ -8,4 +8,4 @@ Icon=veneer
 Terminal=false
 Categories=Game;
 Keywords=steam;proton;wine;gamescope;optiscaler;
-StartupWMClass=Veneer
+StartupWMClass=veneer
