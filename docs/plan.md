@@ -89,8 +89,8 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
   the build; a Wine binary per game with its own prefix, given pinned DXVK
   and VKD3D-Proton before its first launch.
 - **Release:** `.desktop` entry and icon installed by `zig build`;
-  `make release` with reproducible tarballs, `SHA256SUMS` and gpg
-  signatures; a Nix package that fetches its Zig dependencies ahead of the
+  `make tag`, `make release` and `make publish`, with reproducible tarballs,
+  split debug symbols and a cosign signature over `SHA256SUMS`; a Nix package that fetches its Zig dependencies ahead of the
   build; a [user guide](guides/using-veneer.md).
 - **Window:** dvui with Inter; library grid with cover art and search; game
   page with Runner, Display, Upscaling, render scale, HDR and Advanced;

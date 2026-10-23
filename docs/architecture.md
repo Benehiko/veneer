@@ -338,13 +338,15 @@ complex scripts (Arabic, Hebrew, ligatures) do not render correctly.
 `share/icons/hicolor/scalable/apps`, and the licenses under
 `share/licenses/veneer`.
 
-`make release` refuses a dirty tree, then for each of `RELEASE_TARGETS`
-(default `x86_64-linux-gnu`) builds with `-Doptimize=safe` and the version
-from `git describe`, and packs the install into
-`dist/veneer-<version>-<arch>-linux.tar.gz` with sorted names, owner 0 and
-the last commit's time, so the same commit gives the same bytes. It writes
-`dist/SHA256SUMS` and signs each tarball and the sums with
-`gpg --detach-sign --armor` (`GPG_KEY` picks the key).
+A release is three commands, `make tag`, `make release` and
+`make publish`, run on one machine with no CI;
+[releasing.md](releasing.md) says how. `make release` refuses unless `HEAD`
+carries the tag it names. For each of `RELEASE_HOSTS` (default
+`linux-x86_64`) it builds with `-Doptimize=safe`, moves the debug info into a
+separate symbols archive, and packs the install, `README.md` and
+`CHANGELOG.md` into `dist/veneer-<version>-<host>.tar.gz` with sorted names,
+owner 0 and the last commit's time. It writes `dist/SHA256SUMS` and signs it
+keylessly with cosign into `SHA256SUMS.sigstore.json`.
 
 The flake's `packages.default` builds in two steps. `deps` is a
 fixed-output derivation that runs
