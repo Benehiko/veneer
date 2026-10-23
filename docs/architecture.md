@@ -303,8 +303,11 @@ fixed-output derivation that runs
 `zig build --pkg-dir $out -Doptimize=safe --help`. That runs the build
 script, so it fetches dvui, SDL3, Inter and the lazy packages this build
 asks for, ahead of the build. `--fetch=all` would also fetch lazy packages
-Veneer never uses, and some of those carry broken hashes upstream. The package then builds offline with `zig build --system <deps>`,
-and `autoPatchelfHook` adds the Vulkan loader, Wayland, libxkbcommon,
+Veneer never uses, and some of those carry broken hashes upstream. The package then copies them to a writable folder and builds with
+`zig build --pkg-dir` pointing there; Nix's sandbox has no network, so
+nothing more is fetched. (`--system` would not do: it also turns on every
+system-library integration, and dvui then looks for SDL3 and FreeType on
+the host instead of building them.) Then `autoPatchelfHook` adds the Vulkan loader, Wayland, libxkbcommon,
 libdecor and X11 libraries that SDL and Veneer open at run time. When
 `build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
 to `lib.fakeHash`, run `nix build`, and copy the hash Nix reports.

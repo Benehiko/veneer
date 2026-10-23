@@ -68,7 +68,9 @@
             installPhase = ''
               runHook preInstall
               export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-              zig build --system ${deps} -Doptimize=safe -Dversion=${version} --prefix $out
+              cp -r ${deps} $TMPDIR/zig-pkg
+              chmod -R u+w $TMPDIR/zig-pkg
+              zig build --pkg-dir $TMPDIR/zig-pkg -Doptimize=safe -Dversion=${version} --prefix $out
               runHook postInstall
             '';
             meta = {
