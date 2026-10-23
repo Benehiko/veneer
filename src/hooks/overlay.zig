@@ -65,7 +65,11 @@ pub fn enter(arena: Allocator, req: Request) !void {
     writeProc("/proc/self/uid_map", try idMap(&buf, uid)) catch return error.IdMapDenied;
     writeProc("/proc/self/gid_map", try idMap(&buf, gid)) catch return error.IdMapDenied;
     check(linux.mount(null, "/", null, linux.MS.REC | linux.MS.PRIVATE, 0)) catch return error.MountDenied;
-    check(linux.mount("overlay", target, "overlay", 0, @intFromPtr(options.ptr))) catch return error.OverlayMountFailed;
+    const mounted = linux.errno(linux.mount("overlay", target, "overlay", 0, @intFromPtr(options.ptr)));
+    if (mounted != .SUCCESS) {
+        std.log.err("mount -t overlay -o {s} on {s}: {s}", .{ options, req.lower, @tagName(mounted) });
+        return if (mounted == .BUSY) error.OverlayInUse else error.OverlayMountFailed;
+    }
     check(linux.chdir(cwd)) catch return error.WorkdirGone;
 }
 
@@ -74,7 +78,8 @@ pub fn explain(err: anyerror) []const u8 {
         error.UserNamespaceDenied => "this system does not let programs create user namespaces (check kernel.unprivileged_userns_clone, or AppArmor's restriction on Ubuntu)",
         error.IdMapDenied => "the user namespace was created, but the kernel refused the id map",
         error.MountDenied => "mounting is not allowed here (a sandbox such as Flatpak or Landlock may forbid it)",
-        error.OverlayMountFailed => "the kernel refused the overlay mount (unprivileged overlayfs needs Linux 5.11 or later, and the upper directory on a filesystem that supports it)",
+        error.OverlayMountFailed => "the kernel refused the overlay mount; the error code is on the line above, and `journalctl -k -g overlayfs` shows the kernel's reason (unprivileged overlayfs needs Linux 5.11 or later, and the upper directory on a filesystem that supports it)",
+        error.OverlayInUse => "an earlier launch of this game is still running and holds its overlay; stop it (Stop leftover processes, or `veneer stop <game>`) and try again",
         error.WorkdirGone => "the game's working directory vanished after the mount",
         error.BadOverlayRequest => "the overlay command line is malformed",
         error.UnsupportedOverlayPath => "a path contains a comma, colon or backslash, which overlayfs cannot take",

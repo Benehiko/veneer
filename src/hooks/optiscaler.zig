@@ -82,6 +82,15 @@ pub fn stage(arena: Allocator, io: Io, release_dir: []const u8, upper: []const u
     }
 }
 
+pub fn resetSettings(arena: Allocator, io: Io, upper: []const u8, exe_rel_dir: []const u8) !bool {
+    const ini = try std.fs.path.join(arena, &.{ upper, exe_rel_dir, ini_name });
+    Io.Dir.cwd().deleteFile(io, ini) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => return err,
+    };
+    return true;
+}
+
 const testing = std.testing;
 
 test "OptiScaler's DLL takes the proxy name; everything else keeps its own" {
@@ -160,4 +169,32 @@ test "staging links the release beside the exe, renames the DLL, and keeps an ed
     try tmp.dir.access(testing.io, "upper/Game/Licenses", .{});
     try testing.expectError(error.FileNotFound, tmp.dir.access(testing.io, "upper/Game/OptiScaler.dll", .{}));
     try testing.expectError(error.FileNotFound, tmp.dir.access(testing.io, "upper/Game/setup_linux.sh", .{}));
+}
+
+test "a reset drops the game's ini, so the next launch starts from the release's" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", a);
+
+    var rel = try tmp.dir.createDirPathOpen(testing.io, "release", .{});
+    rel.close(testing.io);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "release/OptiScaler.dll", .data = "MZ" });
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "release/OptiScaler.ini", .data = "[Upscalers]\n" });
+    const release = try std.fs.path.join(a, &.{ root, "release" });
+    const upper = try std.fs.path.join(a, &.{ root, "upper" });
+
+    try testing.expect(!try resetSettings(a, testing.io, upper, "Game"));
+    try stage(a, testing.io, release, upper, "Game");
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "upper/Game/OptiScaler.ini", .data = "broken\n" });
+
+    try testing.expect(try resetSettings(a, testing.io, upper, "Game"));
+    try testing.expect(!try resetSettings(a, testing.io, upper, "Game"));
+    try tmp.dir.access(testing.io, "upper/Game/dxgi.dll", .{});
+
+    try stage(a, testing.io, release, upper, "Game");
+    var buf: [64]u8 = undefined;
+    try testing.expectEqualStrings("[Upscalers]\n", try tmp.dir.readFile(testing.io, "upper/Game/OptiScaler.ini", &buf));
 }

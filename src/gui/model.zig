@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const Platform = @import("../library/game.zig").Platform;
 const gamescope = @import("../launch/gamescope.zig");
 const plan = @import("../launch/plan.zig");
+const display = @import("../launch/display.zig");
 
 pub const display_labels = [_][]const u8{ "Normal window", "Gamescope, fullscreen" };
 
@@ -50,11 +51,11 @@ pub fn matches(name: []const u8, query: []const u8) bool {
     return q.len == 0 or std.ascii.findIgnoreCase(name, q) != null;
 }
 
-pub const RunnerMenu = struct {
+pub const Menu = struct {
     labels: []const []const u8,
     values: []const []const u8,
 
-    pub fn indexOf(self: RunnerMenu, runner: []const u8) ?usize {
+    pub fn indexOf(self: Menu, runner: []const u8) ?usize {
         const want = if (runner.len == 0) "auto" else runner;
         for (self.values, 0..) |v, i| {
             if (std.mem.eql(u8, v, want)) return i;
@@ -63,7 +64,27 @@ pub const RunnerMenu = struct {
     }
 };
 
-pub fn runnerMenu(arena: Allocator, tools: []const []const u8, current: []const u8, platform: Platform) Allocator.Error!RunnerMenu {
+pub fn resolutionMenu(arena: Allocator, outs: []const display.Output, current: []const u8) Allocator.Error!Menu {
+    var labels: std.ArrayList([]const u8) = .empty;
+    var values: std.ArrayList([]const u8) = .empty;
+    try labels.append(arena, "Screen's own");
+    try values.append(arena, "auto");
+    if (display.largest(outs)) |o| {
+        for (o.modes) |m| {
+            const text = try std.fmt.allocPrint(arena, "{d}x{d}", .{ m.width, m.height });
+            try labels.append(arena, text);
+            try values.append(arena, text);
+        }
+    }
+    const menu: Menu = .{ .labels = labels.items, .values = values.items };
+    if (menu.indexOf(current) == null) {
+        try labels.append(arena, current);
+        try values.append(arena, current);
+    }
+    return .{ .labels = labels.items, .values = values.items };
+}
+
+pub fn runnerMenu(arena: Allocator, tools: []const []const u8, current: []const u8, platform: Platform) Allocator.Error!Menu {
     var labels: std.ArrayList([]const u8) = .empty;
     var values: std.ArrayList([]const u8) = .empty;
     try labels.append(arena, "Automatic");
@@ -76,7 +97,7 @@ pub fn runnerMenu(arena: Allocator, tools: []const []const u8, current: []const 
         try labels.append(arena, t);
         try values.append(arena, t);
     }
-    const menu: RunnerMenu = .{ .labels = labels.items, .values = values.items };
+    const menu: Menu = .{ .labels = labels.items, .values = values.items };
     if (menu.indexOf(current) == null) {
         const label = if (std.mem.indexOfScalar(u8, current, '/') != null)
             try std.fmt.allocPrint(arena, "Wine: {s}", .{current})
@@ -155,6 +176,24 @@ test "the runner menu offers native only for Linux games and keeps an unknown ch
 
     const gone = try runnerMenu(a, &tools, "GE-Proton9-20", .windows);
     try testing.expectEqualStrings("GE-Proton9-20 (not installed)", gone.labels[gone.indexOf("GE-Proton9-20").?]);
+}
+
+test "the resolution menu lists the largest screen's modes and keeps an unlisted choice visible" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const outs = [_]display.Output{
+        .{ .name = "DP-1", .modes = &.{.{ .width = 1920, .height = 1080 }} },
+        .{ .name = "DP-2", .modes = &.{ .{ .width = 2560, .height = 1440 }, .{ .width = 1920, .height = 1080 } } },
+    };
+
+    const plain = try resolutionMenu(a, &outs, "auto");
+    try testing.expectEqual(@as(usize, 3), plain.values.len);
+    try testing.expectEqualStrings("2560x1440", plain.values[1]);
+    try testing.expectEqual(@as(usize, 2), plain.indexOf("1920x1080").?);
+
+    const odd = try resolutionMenu(a, &outs, "1280x720");
+    try testing.expectEqual(@as(usize, 3), odd.indexOf("1280x720").?);
 }
 
 test "environment assignments survive the one-line text field" {

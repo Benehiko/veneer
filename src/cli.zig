@@ -10,6 +10,7 @@ pub const Verb = enum {
     show,
     set,
     run,
+    stop,
     runners,
     doctor,
     optiscaler,
@@ -37,6 +38,8 @@ const spellings = [_]struct { word: []const u8, verb: Verb }{
     .{ .word = "set", .verb = .set },
     .{ .word = "run", .verb = .run },
     .{ .word = "play", .verb = .run },
+    .{ .word = "stop", .verb = .stop },
+    .{ .word = "kill", .verb = .stop },
     .{ .word = "runners", .verb = .runners },
     .{ .word = "doctor", .verb = .doctor },
     .{ .word = "optiscaler", .verb = .optiscaler },
@@ -109,12 +112,14 @@ pub const usage =
     \\  set <game> key=value...     change a game's settings and save them
     \\  run <game> [key=value...] [--dry-run] [--force] [--size WxH] [-- game args]
     \\                              launch a game; key=value applies to this launch only
+    \\  stop <game>                 force-stop every process a launch of the game left running
     \\  runners                     list the Proton builds Veneer can use
     \\  doctor                      what this system supports, and known problems
     \\  optiscaler [folder]         show or choose the extracted OptiScaler release to use
     \\  optiscaler install [tag]    download a pinned OptiScaler release, verify and unpack it
     \\                              (needs bsdtar, 7zz or 7z; see docs/guides/optiscaler.md)
     \\  optiscaler releases         the pinned releases, and which is installed
+    \\  optiscaler reset <game>     drop the game's OptiScaler.ini; the next launch uses the release's
     \\  install-proton              ask Steam to install Proton Experimental, and follow its progress
     \\  install-proton ge           download and verify the latest GE-Proton into Steam's compatibilitytools.d
     \\  help                        show this text
@@ -125,6 +130,7 @@ pub const usage =
     \\Settings:
     \\  runner=auto|native|<Proton name>|</path/to/wine>
     \\  display=normal|gamescope
+    \\  resolution=auto|WIDTHxHEIGHT          gamescope's output size; auto is the largest screen's own
     \\  upscaling=off|fsr|nis|optiscaler      fsr and nis run in gamescope
     \\  scale=100|77|67|59|50                 render scale for fsr and nis, in %
     \\  hdr=on|off

@@ -50,6 +50,7 @@ pub fn main(init: std.process.Init) !void {
         .show => commands.show(ctx, cmd.rest),
         .set => commands.set(ctx, cmd.rest),
         .run => commands.run(ctx, cmd.rest),
+        .stop => commands.stop(ctx, cmd.rest),
         .runners => commands.runners(ctx),
         .doctor => commands.doctor(ctx),
         .optiscaler => commands.optiscalerDir(ctx, cmd.rest),
@@ -77,6 +78,7 @@ test {
     _ = @import("launch/display.zig");
     _ = @import("launch/steam_client.zig");
     _ = @import("launch/execute.zig");
+    _ = @import("launch/stop.zig");
     _ = @import("launch/compose.zig");
     _ = @import("compat/facts.zig");
     _ = @import("compat/rules.zig");

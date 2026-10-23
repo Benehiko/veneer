@@ -166,10 +166,14 @@ renames the build into Steam's `compatibilitytools.d`.
 
 Two choices reach gamescope: **Display** (normal or gamescope fullscreen)
 and **Upscaling** (FSR 1 or NIS, with a render scale of 100, 77, 67, 59 or
-50 %). FSR and NIS imply gamescope. The output size is the largest connected
-mode in `/sys/class/drm/*/modes`, overridable with `--size`. Veneer reads
-`gamescope --help` once: builds with `--filter` get `-F fsr|nis`, older ones
-get `-U` or `-Y`, and `--hdr-enabled` is passed only when offered.
+50 %). FSR and NIS imply gamescope. Veneer lists each connected output and
+its modes from `/sys/class/drm/card*-*/`. By default the output size is the
+preferred mode of the largest output; the advanced **Resolution** choice
+sets it outright, and `--size` overrides both. Veneer does not choose the
+screen: nested gamescope ignores `-O` and `--display-index`, and the
+compositor places its window. Veneer reads `gamescope --help` once: builds
+with `--filter` get `-F fsr|nis`, older ones get `-U` or `-Y`, and
+`--hdr-enabled` is passed only when offered.
 
 ## Hooks without touching the game
 
@@ -280,11 +284,20 @@ Wayland compositor answers.
   then swaps the result in.
 - Launches run on worker threads and report back with toasts. Closing the
   window waits for the workers.
+- Every launch sets `VENEER_GAME=<id>`, and every process it starts
+  inherits it, Wine's detached ones too. **Stop** finds the game's
+  processes by that variable in `/proc/*/environ`, and by the game's
+  overlay upper layer in `/proc/*/mountinfo`, which also catches processes
+  from launches older than the variable. It sends `SIGTERM`, and `SIGKILL`
+  to any still running 3 seconds later. A launch that needs the overlay
+  refuses to start while any process still holds it, since overlayfs
+  would refuse the mount with `EBUSY`.
 
 **Pages:** a grid of cards (cover art or a named placeholder) with search,
 Add game and Rescan; and a game page with Play, the compatibility verdicts,
 Runner, Display, Upscaling, render scale, HDR, and a collapsed Advanced
-section (environment, game arguments, gamescope arguments). Choices save as
+section (resolution under gamescope, environment, game
+arguments, gamescope arguments). Choices save as
 they change.
 
 **Jobs:** the header's **Jobs** button (with the count of running jobs)
