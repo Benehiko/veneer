@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$pagetitle$ · Veneer</title>
+<meta name="description" content="$description$">
+<link rel="canonical" href="$url$">
+<link rel="icon" href="veneer.svg" type="image/svg+xml">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Veneer: a Linux-native game launcher">
+<meta property="og:title" content="$pagetitle$">
+<meta property="og:description" content="$description$">
+<meta property="og:url" content="$url$">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Chakra+Petch:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<a class="skip" href="#guide">Skip to the guide</a>
+
+<header class="masthead" data-pagefind-ignore>
+  <p class="wordmark"><a href="./"><img src="veneer.svg" alt="">Veneer</a></p>
+  <div class="tools">
+    <form class="site-search" action="search.html" role="search">
+      <input type="search" name="q" placeholder="Search the guides" aria-label="Search the guides">
+    </form>
+  </div>
+  <nav>
+    <a href="using-veneer.html">Using Veneer</a>
+    <a href="optiscaler.html">OptiScaler</a>
+    <a href="guides.html">All guides</a>
+    <a href="https://github.com/Benehiko/veneer">Source</a>
+  </nav>
+</header>
+
+<main id="guide" class="guide">
+  <article>
+    <h1>$pagetitle$</h1>
+$if(toc)$
+    <details class="guide-toc" data-pagefind-ignore>
+      <summary>On this page</summary>
+$table-of-contents$
+    </details>
+$endif$
+$body$
+  </article>
+</main>
+
+<footer data-pagefind-ignore>
+  <p class="credits">Insert coin: free play</p>
+  <p>
+    This page is rendered from
+    <a href="https://github.com/Benehiko/veneer/blob/main/$source$">$source$</a>;
+    corrections are welcome there.
+  </p>
+  <nav>
+    <a href="https://github.com/Benehiko/veneer/releases">Releases</a>
+    <a href="guides.html">All guides</a>
+    <a href="https://github.com/Benehiko/veneer">Source</a>
+  </nav>
+</footer>
+
+</body>
+</html>

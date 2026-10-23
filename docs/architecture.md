@@ -367,3 +367,28 @@ Vulkan variables would pass on to every game Veneer starts, and
 `veneer doctor` would report Nix's Mesa, not the host's. When
 `build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
 to `lib.fakeHash`, run `nix build`, and copy the hash Nix reports.
+
+## Website
+
+<https://benehiko.github.io/veneer/> is built from `docs/guides/` alone;
+the rest of `docs/`, planning and this page included, stays off it.
+`make site` writes it to `_site/` with pandoc and pagefind from
+`nix develop`:
+
+1. `index.html`, `search.html`, `style.css`, `theme.js` and
+   `data/veneer.svg` are copied as they are.
+2. pandoc renders each guide into `guide.template.html`; `README.md`
+   becomes `guides.html`. A guide's first line must be its `# Title`, which
+   becomes the page title. An optional
+   `<!-- description: ... -->` line, invisible on GitHub, fills the page's
+   `<meta name="description">`.
+3. Links are rewritten: `guide.md` to `guide.html`, and links that leave
+   `docs/guides/` to the file on GitHub, so a link that works on GitHub
+   works on the site.
+4. `sitemap.xml` lists every page but search, and pagefind indexes the
+   pages for `search.html`.
+
+`make serve` builds and serves it on <http://localhost:1414>; search needs
+a server. `.github/workflows/pages.yml` runs `make site` on each push to
+`main` that touches the site and deploys `_site/` to GitHub Pages. The
+repository's Pages source must be set to GitHub Actions.

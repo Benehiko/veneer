@@ -110,6 +110,8 @@
             pkgs.git
             pkgs.libarchive
             pkgs.gnupg
+            pkgs.pandoc
+            pkgs.pagefind
           ];
         };
       });

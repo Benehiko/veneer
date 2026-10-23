@@ -1,5 +1,7 @@
 # Using Veneer
 
+<!-- description: Install Veneer, run your Steam and other games through Proton, Wine or natively with gamescope, and find the logs when a launch fails. -->
+
 Veneer runs the games in your Steam library, and games you add yourself,
 through Proton, Wine or natively. It never changes a game's files.
 
@@ -101,10 +103,13 @@ closed or failed, its page has an **Open log** button for that game's log.
 Every feature works without the window. `veneer help` lists them all.
 
 ```sh
-veneer list
-veneer run "ELDEN RING" --dry-run
+veneer                                   # the window
+veneer list                              # every game found
+veneer run "ELDEN RING" --dry-run        # print the launch; change nothing
 veneer set sekiro display=gamescope upscaling=fsr scale=67
-veneer install-proton
+veneer set "Hell is Us" upscaling=optiscaler
+veneer install-proton                    # Proton Experimental, through Steam
+veneer doctor                            # what this system supports
 ```
 
 ## When something goes wrong

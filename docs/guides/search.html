@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search · Veneer</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="veneer.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Chakra+Petch:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pagefind/pagefind-ui.css">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<script src="pagefind/pagefind-ui.js"></script>
+</head>
+<body data-pagefind-ignore="all">
+
+<a class="skip" href="#search">Skip to search</a>
+
+<header class="masthead">
+  <p class="wordmark"><a href="./"><img src="veneer.svg" alt="">Veneer</a></p>
+  <div class="tools"></div>
+  <nav>
+    <a href="using-veneer.html">Using Veneer</a>
+    <a href="optiscaler.html">OptiScaler</a>
+    <a href="guides.html">All guides</a>
+    <a href="https://github.com/Benehiko/veneer">Source</a>
+  </nav>
+</header>
+
+<main id="search">
+  <section class="hero">
+    <h1>Search</h1>
+    <p class="section-lede">Every guide. The index ships with the site, so nothing you type leaves your browser.</p>
+    <div id="search-ui"></div>
+    <noscript>
+      <p>Search needs JavaScript. Every guide is listed on <a href="guides.html">the guides page</a>.</p>
+    </noscript>
+  </section>
+</main>
+
+<script>
+  window.addEventListener("DOMContentLoaded", function () {
+    var ui = new PagefindUI({
+      element: "#search-ui",
+      showSubResults: true,
+      showImages: false,
+      autofocus: true,
+    });
+    var q = new URLSearchParams(location.search).get("q");
+    if (q) ui.triggerSearch(q);
+  });
+</script>
+
+</body>
+</html>
