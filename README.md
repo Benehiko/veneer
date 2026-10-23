@@ -25,7 +25,7 @@ make site     # the website, into _site/; make serve to preview it
 
 [docs/architecture.md](docs/architecture.md) explains the code and the
 release; [AGENTS.md](AGENTS.md) holds the rules for contributors, human or
-agent.
+agent, and [CONTRIBUTING.md](CONTRIBUTING.md) explains how to send a change.
 
 ## License
 
