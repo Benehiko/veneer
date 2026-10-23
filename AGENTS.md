@@ -52,7 +52,7 @@ value of a constant, and do not add a function only so a test can reach
 code. Prefer fast unit tests that need no Steam install, no GPU and no
 display: feed parsers text fixtures and argv builders plain structs.
 
-## 8. Use Nix, not Docker
+## 8. Use Nix
 
 Provide development tooling through Nix (`nix develop`). Zig builds
 everything else from source.
