@@ -109,7 +109,9 @@
             pkgs.gnumake
             pkgs.git
             pkgs.libarchive
-            pkgs.gnupg
+            pkgs.llvm
+            pkgs.cosign
+            pkgs.gh
             pkgs.pandoc
             pkgs.pagefind
           ];

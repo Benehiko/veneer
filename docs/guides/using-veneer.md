@@ -7,14 +7,22 @@ through Proton, Wine or natively. It never changes a game's files.
 
 ## Install
 
-From a release tarball:
+From a [release](https://github.com/Benehiko/veneer/releases): download
+`veneer-<version>-linux-x86_64.tar.gz`, `SHA256SUMS` and
+`SHA256SUMS.sigstore.json` into one directory, then:
 
 ```sh
-gpg --verify veneer-<version>-x86_64-linux.tar.gz.asc
+cosign verify-blob SHA256SUMS \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity 18033717+Benehiko@users.noreply.github.com \
+  --certificate-oidc-issuer https://github.com/login/oauth
 sha256sum -c SHA256SUMS --ignore-missing
-tar -xzf veneer-<version>-x86_64-linux.tar.gz
-cp -r veneer-<version>-x86_64-linux/{bin,share} ~/.local/
+tar -xzf veneer-<version>-linux-x86_64.tar.gz
+cp -r veneer-<version>-linux-x86_64/{bin,share} ~/.local/
 ```
+
+`cosign` must print `Verified OK`; if it does not, run nothing from the
+download.
 
 With Nix on NixOS: run `nix run .` in a clone of the repository, or add
 the flake's `packages.default` to your system. On other distributions,
