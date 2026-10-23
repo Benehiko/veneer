@@ -89,7 +89,7 @@
               export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
               cp -r ${deps} $TMPDIR/zig-pkg
               chmod -R u+w $TMPDIR/zig-pkg
-              zig build --pkg-dir $TMPDIR/zig-pkg -Doptimize=safe -Dversion=${version} --prefix $out
+              zig build --pkg-dir $TMPDIR/zig-pkg -Doptimize=safe -Dversion=${version} -Ddesktop-exec=$out/bin/veneer --prefix $out
               runHook postInstall
             '';
             meta = {

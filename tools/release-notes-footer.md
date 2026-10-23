@@ -10,9 +10,13 @@ Veneer runs on Linux, x86-64. Download
 
 ```sh
 tar -xzf veneer-@VERSION@-linux-x86_64.tar.gz
-cp -r veneer-@VERSION@-linux-x86_64/{bin,share} ~/.local/
-veneer doctor
+./veneer-@VERSION@-linux-x86_64/install.sh
+~/.local/bin/veneer doctor
 ```
+
+`install.sh` copies Veneer under `~/.local`, or under the directory you
+pass it, and points the menu entry at that copy, so the menu starts Veneer
+even when that `bin` is not on your desktop's `PATH`.
 
 Veneer needs a Vulkan driver. The
 [user guide](https://benehiko.github.io/veneer/using-veneer.html) covers the

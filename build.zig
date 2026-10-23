@@ -49,7 +49,13 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallFile(vt323.path("OFL.txt"), "share/licenses/veneer/VT323-OFL.txt").step);
     b.getInstallStep().dependOn(&b.addInstallFile(press.path("OFL.txt"), "share/licenses/veneer/PressStart2P-OFL.txt").step);
     b.getInstallStep().dependOn(&b.addInstallFile(b.path("LICENSE"), "share/licenses/veneer/LICENSE").step);
-    b.getInstallStep().dependOn(&b.addInstallFile(b.path("data/veneer.desktop"), "share/applications/veneer.desktop").step);
+    const desktop_exec = b.option(
+        []const u8,
+        "desktop-exec",
+        "the program the desktop entry starts (default: veneer, looked up on PATH)",
+    ) orelse "veneer";
+    const desktop_entry = b.addWriteFiles().add("veneer.desktop", desktopEntry(b, desktop_exec));
+    b.getInstallStep().dependOn(&b.addInstallFile(desktop_entry, "share/applications/veneer.desktop").step);
     b.getInstallStep().dependOn(&b.addInstallFile(b.path("data/veneer.svg"), "share/icons/hicolor/scalable/apps/veneer.svg").step);
 
     const exe = b.addExecutable(.{ .name = "veneer", .root_module = root });
@@ -94,6 +100,19 @@ fn buildOptions(b: *std.Build) *std.Build.Module {
         "version stamped into the binary (default: git describe)",
     ) orelse describeVersion(b));
     return opts.createModule();
+}
+
+fn desktopEntry(b: *std.Build, exec: []const u8) []const u8 {
+    if (std.mem.indexOfAny(u8, exec, "\"`$\\\n") != null)
+        std.debug.panic("-Ddesktop-exec must not hold quotes, backquotes, $, backslashes or newlines: {s}", .{exec});
+    const template = @embedFile("data/veneer.desktop");
+    const needle = "\nExec=veneer\n";
+    if (std.mem.indexOf(u8, template, needle) == null) @panic("data/veneer.desktop has no 'Exec=veneer' line");
+    const line = if (std.mem.indexOfScalar(u8, exec, ' ') != null)
+        b.fmt("\nExec=\"{s}\"\n", .{exec})
+    else
+        b.fmt("\nExec={s}\n", .{exec});
+    return std.mem.replaceOwned(u8, b.allocator, template, needle, line) catch @panic("OOM");
 }
 
 fn describeVersion(b: *std.Build) []const u8 {

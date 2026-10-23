@@ -18,11 +18,17 @@ cosign verify-blob SHA256SUMS \
   --certificate-oidc-issuer https://github.com/login/oauth
 sha256sum -c SHA256SUMS --ignore-missing
 tar -xzf veneer-<version>-linux-x86_64.tar.gz
-cp -r veneer-<version>-linux-x86_64/{bin,share} ~/.local/
+./veneer-<version>-linux-x86_64/install.sh
 ```
 
 `cosign` must print `Verified OK`; if it does not, run nothing from the
 download.
+
+`install.sh` copies Veneer under `~/.local`, or under the directory you
+pass it. It points the menu entry at that copy, so the menu starts Veneer
+even when the desktop's `PATH` lacks `~/.local/bin`, as it often does. If
+an icon cache exists there, it rebuilds it, so the menu can find Veneer's
+icon.
 
 With Nix on NixOS: run `nix run .` in a clone of the repository, or add
 the flake's `packages.default` to your system. On other distributions,

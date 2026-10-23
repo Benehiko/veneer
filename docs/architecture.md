@@ -339,6 +339,15 @@ complex scripts (Arabic, Hebrew, ligatures) do not render correctly.
 `share/icons/hicolor/scalable/apps`, and the licenses under
 `share/licenses/veneer`.
 
+The desktop entry's `Exec=` comes from `-Ddesktop-exec`, by default
+`veneer`. A desktop session's `PATH` often lacks `~/.local/bin`, so a bare
+name fails there: `make install` passes `$(PREFIX)/bin/veneer`, the Nix
+package `$out/bin/veneer`. A release tarball keeps the default and carries
+`install.sh`, which copies `bin/` and `share/` to a prefix, rewrites `Exec=`
+to that prefix's binary, and rebuilds `share/icons/hicolor/icon-theme.cache`
+if one exists, since a cache built before the icon was installed can hide
+it.
+
 A release is three commands, `make tag`, `make release` and
 `make publish`, run on one machine with no CI;
 [releasing.md](releasing.md) says how. `make release` refuses unless `HEAD`

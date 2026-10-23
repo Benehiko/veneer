@@ -5,6 +5,12 @@ What Veneer does, in the words of someone using it. Each release is on the
 takes its notes from the section that names the version, or from
 `## Unreleased`.
 
+## Unreleased
+
+- The menu entry starts Veneer even when `~/.local/bin` is not on the
+  desktop's `PATH`. Install a release with the new `install.sh`, which
+  also rebuilds a stale icon cache, or with `make install`.
+
 ## v0.1.0
 
 The first release. Veneer is pre-alpha: it finds and plans launches

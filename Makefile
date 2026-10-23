@@ -24,7 +24,10 @@ icon:
 PREFIX ?= $(HOME)/.local
 
 install:
-	zig build -Doptimize=safe --prefix $(PREFIX)
+	zig build -Doptimize=safe -Ddesktop-exec=$(PREFIX)/bin/veneer --prefix $(PREFIX)
+	@if [ -f $(PREFIX)/share/icons/hicolor/icon-theme.cache ] && command -v gtk-update-icon-cache >/dev/null; then \
+		gtk-update-icon-cache -f -t -q $(PREFIX)/share/icons/hicolor; \
+	fi
 
 uninstall:
 	rm -f $(PREFIX)/bin/veneer $(PREFIX)/bin/veneer-inject.exe \
@@ -117,6 +120,7 @@ release-host:
 	zig build -Doptimize=safe -Dversion=$(VERSION) -Dtarget=$(ZIG_TARGET_$(HOST)) \
 		--prefix $(DIST)/$(call host_dir,$(HOST))
 	cp README.md CHANGELOG.md $(DIST)/$(call host_dir,$(HOST))/
+	install -m 755 tools/install.sh $(DIST)/$(call host_dir,$(HOST))/install.sh
 	llvm-objcopy --only-keep-debug $(DIST)/$(call host_dir,$(HOST))/bin/veneer \
 		$(DIST)/symbols/veneer-$(HOST).debug
 	llvm-objcopy --strip-debug $(DIST)/$(call host_dir,$(HOST))/bin/veneer
