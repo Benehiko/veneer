@@ -19,6 +19,7 @@ const optiscaler = @import("../hooks/optiscaler.zig");
 const settings_mod = @import("../config/settings.zig");
 const steam_overlay = @import("steam_overlay.zig");
 const translators = @import("../runner/translators.zig");
+const jobs = @import("../jobs.zig");
 
 pub const Error = error{
     NoExecutable,
@@ -41,6 +42,7 @@ pub const Overrides = struct {
     overlay: bool = false,
     optiscaler_dir: ?[]const u8 = null,
     dry_run: bool = false,
+    job: ?jobs.Job = null,
 };
 
 pub fn overlayDirs(arena: Allocator, env: *const Environ.Map, game_id: []const u8) !struct { upper: []const u8, work: []const u8 } {
@@ -138,7 +140,7 @@ pub fn compose(
             const prefix = try ownPrefix(arena, io, env, game, over.dry_run);
             runner = .{ .wine = .{ .binary = binary, .prefix = prefix } };
             runner_name = binary;
-            native_dlls = translators.setUp(arena, io, env, binary, prefix, over.dry_run) catch |err| blk: {
+            native_dlls = translators.setUp(arena, arena, io, env, binary, prefix, over.dry_run, over.job) catch |err| blk: {
                 std.log.warn("DirectX games may fall back to WineD3D: {s}", .{translators.explain(err) orelse @errorName(err)});
                 break :blk &.{};
             };

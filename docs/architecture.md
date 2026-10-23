@@ -48,6 +48,8 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/runner/ge_proton.zig` | GE-Proton download, digest check and safe unpacking of `.tar.gz` and `.tar.zst` |
 | `src/runner/steam_install.zig` | following an install Steam runs, through its app manifest |
 | `src/runner/translators.zig` | DXVK and VKD3D-Proton in Veneer's own Wine prefixes |
+| `src/jobs.zig` | the job board: each download, unpack, setup and launch, its step and progress |
+| `src/download.zig` | HTTPS downloads that stream to a file, hash as they go, and report bytes |
 | `src/launch/steam_overlay.zig` | the variables that load Steam's overlay |
 | `src/gui/theme.zig` | Adwaita with Inter |
 | `src/config/` | per-game choices, global settings, the ZON file helper |
@@ -280,6 +282,21 @@ Runner, Display, Upscaling, render scale, HDR, and a collapsed Advanced
 section (environment, game arguments, gamescope arguments). Choices save as
 they change.
 
+**Jobs:** the header's **Jobs** button (with the count of running jobs)
+slides a panel in from the right over 220 ms. It lists every job, running
+ones first: the library scan, GE-Proton and OptiScaler installs, Steam's
+Proton install, and each launch, including DXVK and VKD3D-Proton setup for a
+custom Wine prefix. Each shows its step (downloading, verifying, unpacking,
+installing, running), a detail line, and a bar with megabytes when the size
+is known: the response's `Content-Length` for downloads, the position in
+the compressed archive while unpacking, Steam's byte counts for its own
+installs. OptiScaler's unpack, done by an outside tool, has no bar.
+Finished jobs stay as Done or Failed, with the reason, until **Clear
+finished**. `jobs.Board` holds up to 32 jobs behind a mutex, drops the
+oldest finished one when full, and wakes the window only when a step
+changes or progress moves a tenth of a percent. The command line passes no
+job and prints as before.
+
 **Known limits of dvui:** text is laid out one glyph per code point, so
 complex scripts (Arabic, Hebrew, ligatures) do not render correctly.
 
@@ -311,6 +328,12 @@ the host instead of building them.) Then `autoPatchelfHook` adds every
 library SDL and Veneer may open at run time: the Vulkan loader, libglvnd,
 Wayland, libxkbcommon, libdecor, X11, DRM, udev, dbus, PipeWire,
 PulseAudio, ALSA, fribidi, libthai, libusb and liburing. Steam's API,
-sndio, JACK and `libGLES_CM` are left out. When
+sndio, JACK and `libGLES_CM` are left out. The package suits NixOS only:
+Nix's Vulkan loader looks for drivers in `/run/opengl-driver`, and a host
+driver such as Arch's `/usr/lib/libvulkan_radeon.so` cannot load its own
+libraries under Nix's dynamic loader, so SDL finds no GPU backend. Wrapping
+Veneer in `nixGL` would fix the window, but its `LD_LIBRARY_PATH` and
+Vulkan variables would pass on to every game Veneer starts, and
+`veneer doctor` would report Nix's Mesa, not the host's. When
 `build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
 to `lib.fakeHash`, run `nix build`, and copy the hash Nix reports.

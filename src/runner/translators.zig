@@ -4,6 +4,8 @@ const Allocator = std.mem.Allocator;
 const Environ = std.process.Environ;
 const paths = @import("../paths.zig");
 const ge_proton = @import("ge_proton.zig");
+const jobs = @import("../jobs.zig");
+const download = @import("../download.zig");
 
 pub const builtin_table = @embedFile("translator_releases");
 
@@ -130,7 +132,7 @@ fn cached(arena: Allocator, io: Io, env: *const Environ.Map, r: Release) !?ArchD
     return archDirs(arena, io, dir) catch null;
 }
 
-pub fn ensureCached(arena: Allocator, io: Io, env: *const Environ.Map, r: Release) !ArchDirs {
+pub fn ensureCached(gpa: Allocator, arena: Allocator, io: Io, env: *const Environ.Map, r: Release, job: ?jobs.Job) !ArchDirs {
     if (try cached(arena, io, env, r)) |dirs| return dirs;
     const base = try cacheDir(arena, env);
     try Io.Dir.cwd().createDirPath(io, base);
@@ -139,7 +141,7 @@ pub fn ensureCached(arena: Allocator, io: Io, env: *const Environ.Map, r: Releas
     std.log.info("downloading {s} {s} for the Wine prefix", .{ r.name, r.tag });
     const archive = try std.fs.path.join(arena, &.{ base, try std.fmt.allocPrint(arena, ".download-{s}", .{label}) });
     defer Io.Dir.cwd().deleteFile(io, archive) catch {};
-    try ge_proton.download(arena, io, r.url, archive, r.sha256);
+    try download.toFile(gpa, io, r.url, archive, r.sha256, job);
 
     const tmp = try std.fs.path.join(arena, &.{ base, try std.fmt.allocPrint(arena, ".unpack-{s}", .{label}) });
     Io.Dir.cwd().deleteTree(io, tmp) catch {};
@@ -148,7 +150,7 @@ pub fn ensureCached(arena: Allocator, io: Io, env: *const Environ.Map, r: Releas
     {
         var dest = try Io.Dir.cwd().openDir(io, tmp, .{});
         defer dest.close(io);
-        try ge_proton.extract(arena, io, archive, r.compression(), dest);
+        try ge_proton.extract(arena, io, archive, r.compression(), dest, job);
     }
     _ = try archDirs(arena, io, tmp);
     const final = try std.fs.path.join(arena, &.{ base, label });
@@ -192,7 +194,7 @@ fn copyDlls(arena: Allocator, io: Io, from: []const u8, to: []const u8) !void {
     }
 }
 
-pub fn setUp(arena: Allocator, io: Io, env: *const Environ.Map, wine: []const u8, prefix: []const u8, dry_run: bool) ![]const []const u8 {
+pub fn setUp(gpa: Allocator, arena: Allocator, io: Io, env: *const Environ.Map, wine: []const u8, prefix: []const u8, dry_run: bool, job: ?jobs.Job) ![]const []const u8 {
     const releases = try parse(arena, builtin_table);
     var dlls: std.ArrayList([]const u8) = .empty;
     if (dry_run) {
@@ -203,7 +205,7 @@ pub fn setUp(arena: Allocator, io: Io, env: *const Environ.Map, wine: []const u8
     }
 
     const all = try arena.alloc(ArchDirs, releases.len);
-    for (releases, all) |r, *dirs| dirs.* = try ensureCached(arena, io, env, r);
+    for (releases, all) |r, *dirs| dirs.* = try ensureCached(gpa, arena, io, env, r, job);
     for (all) |dirs| try dlls.appendSlice(arena, try dllNames(arena, io, dirs.x64));
 
     const marker = try std.fs.path.join(arena, &.{ prefix, marker_name });
@@ -212,7 +214,9 @@ pub fn setUp(arena: Allocator, io: Io, env: *const Environ.Map, wine: []const u8
         if (std.mem.eql(u8, have, want)) return dlls.items;
     } else |_| {}
 
+    jobs.step(job, .installing, "creating the Wine prefix");
     try boot(arena, io, env, wine, prefix);
+    jobs.step(job, .installing, "DXVK and VKD3D-Proton into the prefix");
     const windows = try std.fs.path.join(arena, &.{ prefix, "drive_c", "windows" });
     const system32 = try std.fs.path.join(arena, &.{ windows, "system32" });
     const syswow64 = try std.fs.path.join(arena, &.{ windows, "syswow64" });

@@ -14,8 +14,11 @@ tar -xzf veneer-<version>-x86_64-linux.tar.gz
 cp -r veneer-<version>-x86_64-linux/{bin,share} ~/.local/
 ```
 
-With Nix: run `nix run .` in a clone of the repository, or add the
-flake's `packages.default` to your system.
+With Nix on NixOS: run `nix run .` in a clone of the repository, or add
+the flake's `packages.default` to your system. On other distributions,
+use a release tarball or `make install` instead. A Nix-built program finds
+GPU drivers only where NixOS puts them (`/run/opengl-driver`), so there the
+window fails with "No supported SDL_GPU backend found".
 
 From source: `make install` puts Veneer, its desktop entry and its icon
 under `~/.local` (set `PREFIX` to change that).
@@ -44,6 +47,10 @@ Pick a game. The page shows three choices:
 
 Press **Play**. If Veneer knows the game will fail with these choices, it
 says why and how to fix it beside the button, and does not start the game.
+While the game starts and runs, the button shows the step (Starting,
+Waiting for Steam, Running), and the line below it the runner. When the
+game ends, that line says whether it closed or failed, why, and where its
+log is.
 
 Choices save as you change them. Everything else sits under **Advanced**:
 environment variables, game arguments and gamescope arguments.
@@ -73,6 +80,14 @@ OptiScaler's menu. See the [OptiScaler guide](optiscaler.md).
 
 Do not use OptiScaler in online games: anti-cheat may ban you. Veneer
 refuses to layer files into games that ship EasyAntiCheat or BattlEye.
+
+## Jobs
+
+Downloads, unpacking, setup and running games show in the jobs panel.
+Press **Jobs** in the header to slide it in from the right; the button
+shows how many jobs are running. Each job shows its step and, when Veneer
+knows the size, a progress bar. A failed job says why. **Clear finished**
+empties the list.
 
 ## The command line
 
