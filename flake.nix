@@ -31,7 +31,7 @@
             dontFixup = true;
             buildPhase = ''
               export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-              zig build --fetch=all --pkg-dir $out
+              zig build --pkg-dir $out -Doptimize=safe --help > /dev/null
             '';
             outputHashMode = "recursive";
             outputHashAlgo = "sha256";
@@ -43,13 +43,13 @@
             pkgs.wayland
             pkgs.libxkbcommon
             pkgs.libdecor
-            pkgs.xorg.libX11
-            pkgs.xorg.libXcursor
-            pkgs.xorg.libXext
-            pkgs.xorg.libXfixes
-            pkgs.xorg.libXi
-            pkgs.xorg.libXrandr
-            pkgs.xorg.libXScrnSaver
+            pkgs.libx11
+            pkgs.libxcursor
+            pkgs.libxext
+            pkgs.libxfixes
+            pkgs.libxi
+            pkgs.libxrandr
+            pkgs.libxscrnsaver
           ];
         in
         {

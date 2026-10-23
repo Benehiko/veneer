@@ -299,9 +299,11 @@ the last commit's time, so the same commit gives the same bytes. It writes
 `gpg --detach-sign --armor` (`GPG_KEY` picks the key).
 
 The flake's `packages.default` builds in two steps. `deps` is a
-fixed-output derivation that runs `zig build --fetch=all --pkg-dir $out`,
-fetching dvui, SDL3, Inter and the rest of `build.zig.zon` ahead of the
-build. The package then builds offline with `zig build --system <deps>`,
+fixed-output derivation that runs
+`zig build --pkg-dir $out -Doptimize=safe --help`. That runs the build
+script, so it fetches dvui, SDL3, Inter and the lazy packages this build
+asks for, ahead of the build. `--fetch=all` would also fetch lazy packages
+Veneer never uses, and some of those carry broken hashes upstream. The package then builds offline with `zig build --system <deps>`,
 and `autoPatchelfHook` adds the Vulkan loader, Wayland, libxkbcommon,
 libdecor and X11 libraries that SDL and Veneer open at run time. When
 `build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
