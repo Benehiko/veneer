@@ -47,6 +47,10 @@ Pick a game. The page shows three choices:
 
 Press **Play**. If Veneer knows the game will fail with these choices, it
 says why and how to fix it beside the button, and does not start the game.
+While the game starts and runs, the button shows the step (Starting,
+Waiting for Steam, Running), and the line below it the runner. When the
+game ends, that line says whether it closed or failed, why, and where its
+log is.
 
 Choices save as you change them. Everything else sits under **Advanced**:
 environment variables, game arguments and gamescope arguments.

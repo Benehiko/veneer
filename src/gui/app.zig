@@ -99,6 +99,7 @@ const App = struct {
     board: jobs.Board,
     jobs_open: bool = false,
     toggle_jobs: bool = false,
+    launches: std.StringHashMapUnmanaged(u32) = .empty,
 
     fn startSteamProtonInstall(app: *App) void {
         if (app.following_steam.swap(true, .acq_rel)) return;
@@ -153,6 +154,9 @@ const App = struct {
         app.mutex.unlock(app.io);
         for (app.threads.items) |t| t.join();
         app.threads.deinit(app.gpa);
+        var keys = app.launches.keyIterator();
+        while (keys.next()) |k| app.gpa.free(k.*);
+        app.launches.deinit(app.gpa);
         if (app.lib) |lib| freeLibrary(app.gpa, lib);
         if (app.sel) |sel| freeSelection(app.gpa, sel);
     }
@@ -215,11 +219,32 @@ const App = struct {
         app.startScan();
     }
 
-    fn play(app: *App, id: []const u8) void {
-        const owned = app.gpa.dupe(u8, id) catch return;
-        const t = std.Thread.spawn(.{}, launchWorker, .{ app, owned }) catch {
+    fn launchView(app: *App, id: []const u8) ?jobs.View {
+        const job_id = app.launches.get(id) orelse return null;
+        return app.board.view(job_id);
+    }
+
+    fn rememberLaunch(app: *App, id: []const u8, job_id: u32) void {
+        const gop = app.launches.getOrPut(app.gpa, id) catch return;
+        if (!gop.found_existing) {
+            gop.key_ptr.* = app.gpa.dupe(u8, id) catch {
+                _ = app.launches.remove(id);
+                return;
+            };
+        }
+        gop.value_ptr.* = job_id;
+    }
+
+    fn play(app: *App, game: Game) void {
+        if (app.launchView(game.id)) |v| {
+            if (!v.step.finished()) return;
+        }
+        const job = app.board.start(.launching, game.name);
+        if (job) |j| app.rememberLaunch(game.id, j.id);
+        const owned = app.gpa.dupe(u8, game.id) catch return endJob(job, false, "out of memory", .{});
+        const t = std.Thread.spawn(.{}, launchWorker, .{ app, owned, job }) catch {
             app.gpa.free(owned);
-            return;
+            return endJob(job, false, "could not start a thread", .{});
         };
         app.threads.append(app.gpa, t) catch t.detach();
     }
@@ -426,12 +451,25 @@ const App = struct {
         const found: []const rules.Verdict = if (lib.probed) launcher.checks(frame_arena, lib.facts, lib.table, sel.choices, .{}, game.platform) catch &.{} else &.{};
         const blocked = rules.worst(found) == .@"error";
 
-        if (dvui.button(@src(), if (blocked) "Cannot play (see below)" else "Play", .{}, .{
+        const launch = app.launchView(game.id);
+        const live = if (launch) |v| !v.step.finished() else false;
+        const play_label = if (live) launch.?.step.label() else if (blocked) "Cannot play (see below)" else "Play";
+        if (dvui.button(@src(), play_label, .{}, .{
             .expand = .horizontal,
             .min_size_content = .height(44),
             .font = .theme(.heading),
             .margin = .{ .y = 12, .h = 12 },
-        }) and !blocked) app.play(game.id);
+        }) and !blocked and !live) app.play(game);
+
+        if (launch) |v| {
+            const status = if (v.detail().len > 0)
+                std.fmt.allocPrint(frame_arena, "{s}: {s}", .{ v.step.label(), v.detail() }) catch v.step.label()
+            else
+                v.step.label();
+            var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false, .margin = .{ .h = 8 } });
+            tl.addText(status, .{});
+            tl.deinit();
+        }
 
         for (found, 0..) |v, i| {
             const prefix = switch (v.severity) {
@@ -751,25 +789,42 @@ fn installWorker(app: *App) void {
     app.post("OptiScaler {s} is ready", .{release.tag});
 }
 
-fn launchWorker(app: *App, id: []u8) void {
+fn launchWorker(app: *App, id: []u8, job: ?jobs.Job) void {
     defer app.gpa.free(id);
     var arena_state = std.heap.ArenaAllocator.init(app.gpa);
     defer arena_state.deinit();
     const a = arena_state.allocator();
 
-    const games = library.scan(a, app.io, app.env) catch return app.post("Could not read the library", .{});
+    const games = library.scan(a, app.io, app.env) catch {
+        endJob(job, false, "could not read the library", .{});
+        return app.post("Could not read the library", .{});
+    };
     const game = switch (library.find(games, id)) {
         .one => |g| g,
-        else => return app.post("That game is no longer installed", .{}),
+        else => {
+            endJob(job, false, "the game is no longer installed", .{});
+            return app.post("That game is no longer installed", .{});
+        },
     };
     const c = choices_mod.load(a, app.io, app.config_dir, id) catch Choices{};
-    const job = app.board.start(.launching, game.name);
     const prepared = launcher.prepare(a, app.io, app.env, game, c, .{ .job = job }) catch |err| {
         const why = compose.explain(err) orelse @errorName(err);
         endJob(job, false, "{s}", .{why});
         return app.post("{s}: {s}", .{ game.name, why });
     };
     const log_path = launcher.logPath(a, app.env, game.id) catch return endJob(job, false, "no log path", .{});
+    if (game.source == .steam) {
+        if (app.env.get("HOME")) |home| {
+            if (!steam_client.running(app.io, home)) {
+                jobs.step(job, .waiting_for_steam, "Steam games need the client for their DRM");
+                steam_client.ensureRunning(app.io, home) catch |err| {
+                    const why = compose.explain(err) orelse @errorName(err);
+                    endJob(job, false, "{s}", .{why});
+                    return app.post("{s}: {s}", .{ game.name, why });
+                };
+            }
+        }
+    }
     jobs.step(job, .running, prepared.runner_name);
     app.post("Starting {s} with {s}", .{ game.name, prepared.runner_name });
     const term = launcher.start(app.gpa, app.io, app.env, game, prepared.plan, log_path) catch |err| {

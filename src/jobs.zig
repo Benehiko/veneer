@@ -153,6 +153,13 @@ pub const Board = struct {
         return out[0..n];
     }
 
+    pub fn view(b: *Board, id: u32) ?View {
+        b.mutex.lockUncancelable(b.io);
+        defer b.mutex.unlock(b.io);
+        const v = b.find(id) orelse return null;
+        return v.*;
+    }
+
     pub fn running(b: *Board) usize {
         b.mutex.lockUncancelable(b.io);
         defer b.mutex.unlock(b.io);
@@ -324,6 +331,18 @@ test "a full board makes room by dropping the oldest finished job, never a runni
     try testing.expect(later.id != first.?.id);
     board.clearFinished();
     try testing.expectEqual(@as(usize, capacity), board.snapshot(&buf).len);
+}
+
+test "a job's view follows its steps until it is cleared" {
+    var board: Board = .{ .io = testing.io };
+    const j = board.start(.launching, "Game").?;
+    try testing.expectEqual(Step.launching, board.view(j.id).?.step);
+    j.fail("exited with code 1");
+    const v = board.view(j.id).?;
+    try testing.expectEqual(Step.failed, v.step);
+    try testing.expectEqualStrings("exited with code 1", v.detail());
+    board.clearFinished();
+    try testing.expect(board.view(j.id) == null);
 }
 
 test "long titles are cut to fit" {
