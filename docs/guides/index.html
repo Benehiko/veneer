@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Veneer: a Linux-native game launcher</title>
+<meta name="description" content="Veneer runs your Steam library and the games you add yourself through Proton, Wine or natively, with gamescope and OptiScaler one click away. It never touches game files.">
+<link rel="canonical" href="https://benehiko.github.io/veneer/">
+<link rel="icon" href="veneer.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Veneer: a Linux-native game launcher">
+<meta property="og:title" content="Veneer: a Linux-native game launcher">
+<meta property="og:description" content="Steam and your own games through Proton, Wine or natively, with gamescope and OptiScaler one click away. Game files are never touched.">
+<meta property="og:url" content="https://benehiko.github.io/veneer/">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Chakra+Petch:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<a class="skip" href="#start">Skip to getting started</a>
+
+<header class="masthead" data-pagefind-ignore>
+  <p class="wordmark"><img src="veneer.svg" alt="">Veneer</p>
+  <div class="tools">
+    <form class="site-search" action="search.html" role="search">
+      <input type="search" name="q" placeholder="Search the guides" aria-label="Search the guides">
+    </form>
+  </div>
+  <nav>
+    <a href="using-veneer.html">Using Veneer</a>
+    <a href="optiscaler.html">OptiScaler</a>
+    <a href="guides.html">All guides</a>
+    <a href="https://github.com/Benehiko/veneer">Source</a>
+  </nav>
+</header>
+
+<main>
+
+  <section class="hero">
+    <p class="marquee">Pre-alpha &middot; 1 player &middot; Linux</p>
+
+    <h1>Your games, on Linux, with nothing left behind.</h1>
+
+    <div class="command" role="figure" aria-label="A gamescope and FSR launch, set from the command line">
+      <span class="prompt" aria-hidden="true">&gt;</span><code>veneer set sekiro display=gamescope upscaling=fsr</code>
+    </div>
+
+    <p class="lede">
+      Veneer finds your Steam library and the games you add yourself, and
+      runs them through Proton, Wine or natively, with gamescope and
+      OptiScaler one click away. Everything it adds is layered over the game
+      at launch and gone when the game exits.
+    </p>
+
+    <div class="downloads" id="start">
+      <a class="get" href="using-veneer.html#install"><span class="blink">Press start</span></a>
+      <a class="get alt" href="https://github.com/Benehiko/veneer/releases">Releases</a>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>High scores</h2>
+
+    <table class="scores">
+      <thead>
+        <tr><th scope="col">Rank</th><th scope="col">Why Veneer</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1ST</td>
+          <td>
+            Game files are never touched.
+            <p>
+              OptiScaler's usual install copies DLLs into the game directory,
+              where an update or a file check can break it. Veneer mounts them
+              in an overlay only the game sees, so the install stays as Steam
+              left it.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td>2ND</td>
+          <td>
+            Three choices per game.
+            <p>
+              Runner, Display and Upscaling, each with a working default. The
+              rest is detected, or tucked under <b>Advanced</b>.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td>3RD</td>
+          <td>
+            Warnings before launch, not after a crash.
+            <p>
+              Whether gamescope or OptiScaler works depends on the GPU, the
+              kernel and the driver. Veneer checks them and says why a launch
+              would fail, and how to fix it, before you press Play.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td>4TH</td>
+          <td>
+            Every feature works without the window.
+            <p>
+              <code>veneer list</code>, <code>veneer run</code>,
+              <code>veneer set</code> and <code>veneer doctor</code> do from a
+              terminal what the window does.
+            </p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Select stage</h2>
+    <ul class="levels">
+      <li>
+        <span class="stage">Stage 1</span>
+        <a href="using-veneer.html">Using Veneer</a>: install it, run a game, and fix what goes wrong.
+      </li>
+      <li>
+        <span class="stage">Stage 2</span>
+        <a href="optiscaler.html">OptiScaler with Veneer</a>: download a release and turn it on for a game.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer data-pagefind-ignore>
+  <p class="credits">Insert coin: free play</p>
+  <p>
+    Veneer is free software under the GPL, version 3 or later.
+  </p>
+  <nav>
+    <a href="https://github.com/Benehiko/veneer/releases">Releases</a>
+    <a href="guides.html">All guides</a>
+    <a href="https://github.com/Benehiko/veneer">Source</a>
+  </nav>
+</footer>
+
+</body>
+</html>

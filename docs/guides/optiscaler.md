@@ -1,5 +1,7 @@
 # OptiScaler with Veneer
 
+<!-- description: Layer OptiScaler over a game with Veneer: download and verify a release, or use one you extracted, without changing the game's files. -->
+
 Veneer layers OptiScaler over a game without changing the game's files. It
 needs an OptiScaler release on disk, which you can provide in one of two
 ways.
