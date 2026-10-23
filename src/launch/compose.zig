@@ -19,6 +19,7 @@ const optiscaler = @import("../hooks/optiscaler.zig");
 const settings_mod = @import("../config/settings.zig");
 const steam_overlay = @import("steam_overlay.zig");
 const translators = @import("../runner/translators.zig");
+const steam_runtime = @import("../runner/steam_runtime.zig");
 const jobs = @import("../jobs.zig");
 const stop = @import("stop.zig");
 
@@ -174,16 +175,27 @@ pub fn compose(
                 std.log.warn("no Proton named '{s}'; using {s}", .{ kind.named, tool.name });
             }
             runner_name = tool.name;
+            const runtime: ?plan.Runtime = switch (try steam_runtime.forTool(arena, io, locations, tool.dir, plan.proton_verb)) {
+                .none => null,
+                .missing => |id| blk: {
+                    std.log.warn("{s} needs the Steam Linux Runtime (app {s}), which is not installed; running Proton without it. Install it from Steam's Tools library", .{ tool.name, id });
+                    break :blk null;
+                },
+                .found => |rt| .{ .dir = rt.dir, .argv = rt.argv },
+            };
             runner = .{ .proton = if (game.steam) |s| .{
                 .script = tool.script,
                 .compat_data = try std.fs.path.join(arena, &.{ s.steamapps, "compatdata", s.app_id }),
                 .steam_root = s.root,
                 .install_path = game.install_dir,
                 .library = s.steamapps,
+                .shader_cache = try std.fs.path.join(arena, &.{ s.steamapps, "shadercache", s.app_id }),
+                .runtime = runtime,
             } else .{
                 .script = tool.script,
                 .compat_data = try ownPrefix(arena, io, env, game, over.dry_run),
                 .steam_root = locations[0].root,
+                .runtime = runtime,
             } };
         },
     }
@@ -204,7 +216,7 @@ pub fn compose(
         if (!caps.present) return error.NoGamescope;
         wrappers = try gamescope.argv(arena, .{
             .output = over.output orelse display.size(try display.outputs(arena, io), display.parseMode(choices.resolution)),
-            .render_scale = if (choices.upscaling == .off) 100 else choices.render_scale,
+            .render_scale = choices.gamescopeScale(),
             .filter = switch (choices.upscaling) {
                 .fsr => .fsr,
                 .nis => .nis,
