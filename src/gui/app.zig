@@ -504,12 +504,15 @@ const App = struct {
         var side = dvui.box(@src(), .{}, .{
             .expand = .vertical,
             .gravity_x = 1,
-            .min_size_content = .width(panel_w),
-            .max_size_content = .width(panel_w),
-            .padding = .all(16),
+            .min_size_content = .width(panel_w + 32),
+            .max_size_content = .width(panel_w + 32),
             .background = true,
         });
         defer side.deinit();
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+        var inner = dvui.box(@src(), .{}, .{ .expand = .horizontal, .padding = .all(16) });
+        defer inner.deinit();
 
         dvui.labelNoFmt(@src(), game.name, .{}, .{ .font = .theme(.title), .max_size_content = .width(panel_w) });
         dvui.label(@src(), "{s} game, from {s}", .{ if (game.platform == .windows) "Windows" else "Linux", if (game.source == .steam) "Steam" else "your library" }, .{});
