@@ -6,6 +6,8 @@ you add yourself through Proton, Wine or natively, with gamescope and
 never touches game files: what it adds is layered over the game at launch
 and gone when the game exits.
 
+![Veneer's library: a grid of game covers with a search bar and Add game, Rescan and Jobs buttons](docs/screenshot.png)
+
 **Status: pre-alpha.** See [docs/plan.md](docs/plan.md#status) for what has
 been verified on real games.
 
