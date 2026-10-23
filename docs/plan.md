@@ -129,7 +129,8 @@ Each needs a display, a GPU, or mount rights the build sandbox lacks.
 ### Build
 
 - [ ] **Nix package (M9):** `nix build` succeeds; check the package
-      opens the window.
+      opens the window on NixOS. On Arch it cannot: Nix's Vulkan loader
+      finds no usable host driver.
 - [ ] **First release (M9):** tag a version and run `make release` with the
       signing key.
 - [ ] **ROCm rules (M5):** add one when a sourced ROCm requirement for

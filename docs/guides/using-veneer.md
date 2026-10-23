@@ -14,8 +14,11 @@ tar -xzf veneer-<version>-x86_64-linux.tar.gz
 cp -r veneer-<version>-x86_64-linux/{bin,share} ~/.local/
 ```
 
-With Nix: run `nix run .` in a clone of the repository, or add the
-flake's `packages.default` to your system.
+With Nix on NixOS: run `nix run .` in a clone of the repository, or add
+the flake's `packages.default` to your system. On other distributions,
+use a release tarball or `make install` instead. A Nix-built program finds
+GPU drivers only where NixOS puts them (`/run/opengl-driver`), so there the
+window fails with "No supported SDL_GPU backend found".
 
 From source: `make install` puts Veneer, its desktop entry and its icon
 under `~/.local` (set `PREFIX` to change that).

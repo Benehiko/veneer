@@ -311,6 +311,12 @@ the host instead of building them.) Then `autoPatchelfHook` adds every
 library SDL and Veneer may open at run time: the Vulkan loader, libglvnd,
 Wayland, libxkbcommon, libdecor, X11, DRM, udev, dbus, PipeWire,
 PulseAudio, ALSA, fribidi, libthai, libusb and liburing. Steam's API,
-sndio, JACK and `libGLES_CM` are left out. When
+sndio, JACK and `libGLES_CM` are left out. The package suits NixOS only:
+Nix's Vulkan loader looks for drivers in `/run/opengl-driver`, and a host
+driver such as Arch's `/usr/lib/libvulkan_radeon.so` cannot load its own
+libraries under Nix's dynamic loader, so SDL finds no GPU backend. Wrapping
+Veneer in `nixGL` would fix the window, but its `LD_LIBRARY_PATH` and
+Vulkan variables would pass on to every game Veneer starts, and
+`veneer doctor` would report Nix's Mesa, not the host's. When
 `build.zig.zon` changes, `depsHash` in `flake.nix` must change too: set it
 to `lib.fakeHash`, run `nix build`, and copy the hash Nix reports.
