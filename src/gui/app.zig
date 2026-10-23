@@ -262,13 +262,13 @@ const App = struct {
         var body = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         defer body.deinit();
 
+        if (jobs_width >= 1) app.jobsPanel(jobs_width);
         if (app.lib) |lib| {
-            app.grid(lib);
             if (app.sel != null) app.panel(lib);
+            app.grid(lib);
         } else {
             dvui.labelNoFmt(@src(), "Looking for games…", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both });
         }
-        if (jobs_width >= 1) app.jobsPanel(jobs_width);
     }
 
     fn header(app: *App) void {
@@ -314,6 +314,7 @@ const App = struct {
     fn jobsPanel(app: *App, width: f32) void {
         var side = dvui.box(@src(), .{}, .{
             .expand = .vertical,
+            .gravity_x = 1,
             .min_size_content = .width(width),
             .max_size_content = .width(width),
             .background = true,
@@ -438,6 +439,7 @@ const App = struct {
 
         var side = dvui.box(@src(), .{}, .{
             .expand = .vertical,
+            .gravity_x = 1,
             .min_size_content = .width(panel_w),
             .max_size_content = .width(panel_w),
             .padding = .all(16),
