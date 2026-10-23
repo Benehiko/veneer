@@ -6,3 +6,6 @@ takes its notes from the section that names the version, or from
 `## Unreleased`.
 
 ## Unreleased
+
+- A new icon, in the window's own colours. The window now shows it and
+  groups under Veneer's launcher entry in the dock and task switcher.

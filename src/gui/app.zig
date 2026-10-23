@@ -3,6 +3,7 @@ const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const Environ = std.process.Environ;
 const dvui = @import("dvui");
+const build_info = @import("build_info");
 const Backend = @import("sdl3gpu-backend");
 const library = @import("../library/library.zig");
 const Game = library.Game;
@@ -970,8 +971,10 @@ fn launchWorker(app: *App, id: []u8, job: ?jobs.Job) void {
 
 pub fn run(gpa: Allocator, io: Io, env: *const Environ.Map) !void {
     _ = Backend.c.SDL_SetHint(Backend.c.SDL_HINT_VIDEO_DRIVER, "wayland,x11");
+    _ = Backend.c.SDL_SetAppMetadata("Veneer", std.fmt.comptimePrint("{s}", .{build_info.version}), "veneer");
 
     var backend = try Backend.initWindow(.{
+        .icon = @embedFile("veneer_icon"),
         .io = io,
         .allocator = gpa,
         .size = .{ .w = 1280, .h = 820 },
