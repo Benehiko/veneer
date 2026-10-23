@@ -43,10 +43,14 @@ pub fn prepare(arena: Allocator, io: Io, env: *const Environ.Map, game: Game, c:
     return .{ .plan = try plan.build(arena, outcome.input), .runner_name = outcome.runner_name };
 }
 
-pub fn logPath(arena: Allocator, env: *const Environ.Map, game_id: []const u8) ![]const u8 {
+pub fn logDir(arena: Allocator, env: *const Environ.Map) ![]const u8 {
     const state = try paths.dir(arena, env, .state);
+    return std.fs.path.join(arena, &.{ state, "logs" });
+}
+
+pub fn logPath(arena: Allocator, env: *const Environ.Map, game_id: []const u8) ![]const u8 {
     const name = try std.fmt.allocPrint(arena, "{s}.log", .{try choices_mod.slug(arena, game_id)});
-    return std.fs.path.join(arena, &.{ state, "logs", name });
+    return std.fs.path.join(arena, &.{ try logDir(arena, env), name });
 }
 
 pub fn start(gpa: Allocator, io: Io, env: *const Environ.Map, game: Game, p: plan.Plan, log_path: []const u8) !std.process.Child.Term {

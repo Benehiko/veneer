@@ -87,7 +87,9 @@ Downloads, unpacking, setup and running games show in the jobs panel.
 Press **Jobs** in the header to slide it in from the right; the button
 shows how many jobs are running. Each job shows its step and, when Veneer
 knows the size, a progress bar. A failed job says why. **Clear finished**
-empties the list.
+empties the list, and **Logs** opens the folder of launch logs
+(`$XDG_STATE_HOME/veneer/logs`) in your file manager. Once a game has
+closed or failed, its page has an **Open log** button for that game's log.
 
 ## The command line
 
