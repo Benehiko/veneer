@@ -69,10 +69,10 @@ pub fn build(arena: Allocator, in: Input) BuildError!Plan {
     var argv: std.ArrayList([]const u8) = .empty;
     var env: std.ArrayList(EnvVar) = .empty;
 
+    try argv.appendSlice(arena, in.wrappers);
     if (in.overlay) |o| {
         try argv.appendSlice(arena, try overlay.wrapperArgv(arena, o.veneer, o.lower, o.upper, o.work, in.workdir));
     }
-    try argv.appendSlice(arena, in.wrappers);
     switch (in.runner) {
         .native => |n| if (n.runtime) |rt| try argv.append(arena, rt),
         .proton => |p| {
@@ -284,7 +284,7 @@ test "injection into a native game is refused" {
     }));
 }
 
-test "the overlay wraps everything, gamescope included, and re-enters the working directory" {
+test "gamescope stays outside the overlay's user namespace, and the overlay re-enters the working directory" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const p = try build(arena.allocator(), .{
@@ -294,7 +294,7 @@ test "the overlay wraps everything, gamescope included, and re-enters the workin
         .wrappers = &.{ "gamescope", "--" },
         .overlay = .{ .veneer = "/usr/bin/veneer", .lower = "/g", .upper = "/d/up", .work = "/d/work" },
     });
-    const want = [_][]const u8{ "/usr/bin/veneer", overlay.verb, "/g", "/d/up", "/d/work", "/g/bin", "--", "gamescope", "--", "wine", "/g/bin/g.exe" };
+    const want = [_][]const u8{ "gamescope", "--", "/usr/bin/veneer", overlay.verb, "/g", "/d/up", "/d/work", "/g/bin", "--", "wine", "/g/bin/g.exe" };
     try testing.expectEqual(want.len, p.argv.len);
     for (want, p.argv) |w, a| try testing.expectEqualStrings(w, a);
 }

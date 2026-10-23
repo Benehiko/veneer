@@ -219,6 +219,17 @@ const App = struct {
         app.startScan();
     }
 
+    fn openLogs(app: *App, file: ?[]const u8) void {
+        const arena = dvui.currentWindow().arena();
+        const dir = launcher.logDir(arena, app.env) catch return;
+        Io.Dir.cwd().createDirPath(app.io, dir) catch {};
+        const target = if (file) |f| (if (Io.Dir.cwd().access(app.io, f, .{})) f else |_| dir) else dir;
+        const url = model.fileUrl(arena, target) catch return;
+        if (!Backend.c.SDL_OpenURL(url.ptr)) {
+            dvui.toast(@src(), .{ .message = std.fmt.allocPrint(arena, "Could not open {s}", .{target}) catch "Could not open the logs" });
+        }
+    }
+
     fn launchView(app: *App, id: []const u8) ?jobs.View {
         const job_id = app.launches.get(id) orelse return null;
         return app.board.view(job_id);
@@ -262,13 +273,13 @@ const App = struct {
         var body = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         defer body.deinit();
 
+        if (jobs_width >= 1) app.jobsPanel(jobs_width);
         if (app.lib) |lib| {
-            app.grid(lib);
             if (app.sel != null) app.panel(lib);
+            app.grid(lib);
         } else {
             dvui.labelNoFmt(@src(), "Looking for games…", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both });
         }
-        if (jobs_width >= 1) app.jobsPanel(jobs_width);
     }
 
     fn header(app: *App) void {
@@ -314,6 +325,7 @@ const App = struct {
     fn jobsPanel(app: *App, width: f32) void {
         var side = dvui.box(@src(), .{}, .{
             .expand = .vertical,
+            .gravity_x = 1,
             .min_size_content = .width(width),
             .max_size_content = .width(width),
             .background = true,
@@ -334,6 +346,7 @@ const App = struct {
             defer top.deinit();
             dvui.labelNoFmt(@src(), "Jobs", .{}, .{ .font = .theme(.title), .gravity_y = 0.5 });
             if (dvui.button(@src(), "Clear finished", .{}, .{ .gravity_x = 1, .gravity_y = 0.5 })) app.board.clearFinished();
+            if (dvui.button(@src(), "Logs", .{}, .{ .gravity_x = 1, .gravity_y = 0.5 })) app.openLogs(null);
         }
 
         var buf: [jobs.capacity]jobs.View = undefined;
@@ -438,6 +451,7 @@ const App = struct {
 
         var side = dvui.box(@src(), .{}, .{
             .expand = .vertical,
+            .gravity_x = 1,
             .min_size_content = .width(panel_w),
             .max_size_content = .width(panel_w),
             .padding = .all(16),
@@ -469,6 +483,11 @@ const App = struct {
             var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false, .margin = .{ .h = 8 } });
             tl.addText(status, .{});
             tl.deinit();
+            if (v.step.finished()) {
+                if (dvui.button(@src(), "Open log", .{}, .{ .margin = .{ .h = 8 } })) {
+                    app.openLogs(launcher.logPath(frame_arena, app.env, game.id) catch null);
+                }
+            }
         }
 
         for (found, 0..) |v, i| {

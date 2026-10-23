@@ -19,6 +19,19 @@ pub fn sizeText(buf: []u8, done: u64, total: u64) []const u8 {
     return std.fmt.bufPrint(buf, "{d:.1} of {d:.1} MB, {d}%", .{ d, t, pct }) catch "";
 }
 
+pub fn fileUrl(arena: Allocator, path: []const u8) Allocator.Error![:0]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    try out.appendSlice(arena, "file://");
+    for (path) |c| {
+        if (std.ascii.isAlphanumeric(c) or std.mem.indexOfScalar(u8, "/-_.~", c) != null) {
+            try out.append(arena, c);
+        } else {
+            try out.print(arena, "%{X:0>2}", .{c});
+        }
+    }
+    return out.toOwnedSliceSentinel(arena, 0);
+}
+
 pub fn scaleIndex(scale: u8) usize {
     var best: usize = 0;
     var best_gap: u8 = 255;
@@ -105,6 +118,13 @@ test "the render scale snaps to the nearest offered step" {
     try testing.expectEqual(@as(usize, 2), scaleIndex(67));
     try testing.expectEqual(@as(usize, 2), scaleIndex(65));
     try testing.expectEqual(@as(usize, 4), scaleIndex(25));
+}
+
+test "a file URL escapes spaces and other characters a URL cannot hold" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    try testing.expectEqualStrings("file:///home/p/.local/state/veneer/logs", try fileUrl(arena.allocator(), "/home/p/.local/state/veneer/logs"));
+    try testing.expectEqualStrings("file:///home/my%20name/a%23b%25", try fileUrl(arena.allocator(), "/home/my name/a#b%"));
 }
 
 test "search matches any part of a name, ignoring case and stray spaces" {
