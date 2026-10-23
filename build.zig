@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+    const target = resolveTarget(b);
     const optimize = b.standardOptimizeOption(.{});
 
     const fmt_paths: []const std.Build.LazyPath = &.{ b.path("build.zig"), b.path("src") };
@@ -71,6 +71,18 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = root })).step);
+}
+
+fn resolveTarget(b: *std.Build) std.Build.ResolvedTarget {
+    var query = b.standardTargetOptionsQueryOnly(.{});
+    const native = b.resolveTargetQuery(query);
+    const ld = native.result.dynamic_linker.get() orelse return native;
+    if (!query.isNativeOs() or !std.mem.startsWith(u8, ld, "/nix/store/")) return native;
+    if (b.graph.environ_map.get("IN_NIX_SHELL") == null) return native;
+    if (std.Io.Dir.cwd().access(b.graph.io, "/etc/NIXOS", .{})) |_| return native else |_| {}
+    query.os_tag = native.result.os.tag;
+    query.abi = native.result.abi;
+    return b.resolveTargetQuery(query);
 }
 
 fn buildOptions(b: *std.Build) *std.Build.Module {
