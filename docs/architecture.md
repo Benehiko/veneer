@@ -182,8 +182,11 @@ prefix. The player's value wins.
 
 ### Overlay
 
-`veneer __overlay <lower> <upper> <work> <cwd> -- <argv>` wraps the whole
-launch, gamescope included:
+`veneer __overlay <lower> <upper> <work> <cwd> -- <argv>` wraps the
+runner and the game. gamescope runs outside it, as its parent: inside the
+user namespace only the player's uid is mapped, so root's
+`/tmp/.X11-unix` looks owned by nobody and gamescope's Xwayland refuses to
+start. The overlay then:
 
 1. `unshare(CLONE_NEWUSER | CLONE_NEWNS)`, then map the player's uid and gid
    onto themselves.
