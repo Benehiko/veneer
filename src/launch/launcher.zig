@@ -14,6 +14,7 @@ const compose = @import("compose.zig");
 const plan = @import("plan.zig");
 const execute = @import("execute.zig");
 const steam_client = @import("steam_client.zig");
+const jobs = @import("../jobs.zig");
 
 pub fn featuresFor(c: Choices, over: compose.Overrides, platform: Platform) rules.Features {
     var f: rules.Features = .empty;
@@ -35,12 +36,17 @@ pub fn checks(arena: Allocator, facts: facts_mod.Facts, table: []const rules.Rul
 
 pub const Prepared = struct {
     plan: plan.Plan,
+    setup: ?plan.Plan = null,
     runner_name: []const u8,
 };
 
 pub fn prepare(arena: Allocator, io: Io, env: *const Environ.Map, game: Game, c: Choices, over: compose.Overrides) !Prepared {
     const outcome = try compose.compose(arena, io, env, game, c, over);
-    return .{ .plan = try plan.build(arena, outcome.input), .runner_name = outcome.runner_name };
+    return .{
+        .plan = try plan.build(arena, outcome.input),
+        .setup = if (outcome.setup) |s| try plan.build(arena, s) else null,
+        .runner_name = outcome.runner_name,
+    };
 }
 
 pub fn logDir(arena: Allocator, env: *const Environ.Map) ![]const u8 {
@@ -53,14 +59,36 @@ pub fn logPath(arena: Allocator, env: *const Environ.Map, game_id: []const u8) !
     return std.fs.path.join(arena, &.{ try logDir(arena, env), name });
 }
 
-pub fn start(gpa: Allocator, io: Io, env: *const Environ.Map, game: Game, p: plan.Plan, log_path: []const u8) !std.process.Child.Term {
+pub fn setupLogPath(arena: Allocator, log_path: []const u8) Allocator.Error![]const u8 {
+    const stem = if (std.mem.endsWith(u8, log_path, ".log")) log_path[0 .. log_path.len - ".log".len] else log_path;
+    return std.fmt.allocPrint(arena, "{s}.ea-setup.log", .{stem});
+}
+
+pub fn start(gpa: Allocator, io: Io, env: *const Environ.Map, game: Game, prepared: Prepared, log_path: []const u8, job: ?jobs.Job) !std.process.Child.Term {
     if (game.source == .steam) {
         if (env.get("HOME")) |home| try steam_client.ensureRunning(io, home);
     }
-    return execute.run(gpa, io, env, p, log_path);
+    if (prepared.setup) |setup| {
+        const setup_log = try setupLogPath(gpa, log_path);
+        defer gpa.free(setup_log);
+        const term = try execute.run(gpa, io, env, setup, setup_log);
+        const ok = switch (term) {
+            .exited => |code| code == 0,
+            else => false,
+        };
+        if (!ok) return error.EaSetupFailed;
+        jobs.step(job, .running, prepared.runner_name);
+    }
+    return execute.run(gpa, io, env, prepared.plan, log_path);
 }
 
 const testing = std.testing;
+
+test "the EA setup log sits beside the game's log" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    try testing.expectEqualStrings("/l/steam-1.ea-setup.log", try setupLogPath(arena.allocator(), "/l/steam-1.log"));
+}
 
 test "features follow the choices and the one-off hooks" {
     const plain = featuresFor(.{}, .{}, .linux);

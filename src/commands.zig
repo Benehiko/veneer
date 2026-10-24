@@ -255,13 +255,21 @@ pub fn run(ctx: Ctx, args: []const []const u8) !void {
         return err;
     };
     if (dry) {
+        if (prepared.setup) |setup| {
+            try ctx.out.writeAll("# EA app setup, before the game\n");
+            try plan.writeShell(ctx.out, setup);
+            try ctx.out.writeAll("\n# game\n");
+        }
         try plan.writeShell(ctx.out, prepared.plan);
         return;
     }
     const log_path = try launcher.logPath(ctx.arena, ctx.env, t.game.id);
+    if (prepared.setup != null) {
+        try ctx.out.print("installing the EA app first, which {s} needs\nlog: {s}\n", .{ t.game.name, try launcher.setupLogPath(ctx.arena, log_path) });
+    }
     try ctx.out.print("launching {s} with {s}\nlog: {s}\n", .{ t.game.name, prepared.runner_name, log_path });
     try ctx.out.flush();
-    const term = launcher.start(ctx.gpa, ctx.io, ctx.env, t.game, prepared.plan, log_path) catch |err| {
+    const term = launcher.start(ctx.gpa, ctx.io, ctx.env, t.game, prepared, log_path, null) catch |err| {
         return fail("{s}", .{compose.explain(err) orelse @errorName(err)});
     };
     switch (term) {

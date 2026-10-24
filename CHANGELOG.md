@@ -10,6 +10,12 @@ takes its notes from the section that names the version, or from
 - The menu entry starts Veneer even when `~/.local/bin` is not on the
   desktop's `PATH`. Install a release with the new `install.sh`, which
   also rebuilds a stale icon cache, or with `make install`.
+- EA games that start through the EA app (`steam2ea://`) launch from
+  Veneer. Veneer installs the EA app into the game's prefix before the
+  first launch, as Steam does.
+- A Steam library on a NAS (NFS or SMB) no longer stops the EA app from
+  installing with "Unable to install to a network path". Veneer shows Wine
+  the prefix as a local disk; your files stay where they are.
 
 ## v0.1.0
 

@@ -946,9 +946,13 @@ fn launchWorker(app: *App, id: []u8, job: ?jobs.Job) void {
             }
         }
     }
-    jobs.step(job, .running, prepared.runner_name);
+    if (prepared.setup != null) {
+        jobs.step(job, .installing, "the EA app, which this game needs");
+    } else {
+        jobs.step(job, .running, prepared.runner_name);
+    }
     app.post("Starting {s} with {s}", .{ game.name, prepared.runner_name });
-    const term = launcher.start(app.gpa, app.io, app.env, game, prepared.plan, log_path) catch |err| {
+    const term = launcher.start(app.gpa, app.io, app.env, game, prepared, log_path, job) catch |err| {
         const why = compose.explain(err) orelse @errorName(err);
         endJob(job, false, "{s}", .{why});
         return app.post("{s}: {s}", .{ game.name, why });

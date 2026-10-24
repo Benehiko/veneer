@@ -13,7 +13,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$prefix"
 prefix=$(cd "$prefix" && pwd)
 
-cp -R "$here/bin" "$here/share" "$prefix/"
+cp -R "$here/bin" "$here/lib" "$here/share" "$prefix/"
 
 exec_path=$prefix/bin/veneer
 case $exec_path in

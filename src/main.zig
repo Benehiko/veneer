@@ -99,4 +99,7 @@ test {
     _ = @import("runner/translators.zig");
     _ = @import("jobs.zig");
     _ = @import("download.zig");
+    _ = @import("hooks/localfs.zig");
+    _ = @import("launch/ea_app.zig");
+    _ = @import("library/steam.zig");
 }

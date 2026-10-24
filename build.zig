@@ -71,6 +71,28 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(injector);
 
+    const shim_arches = [_]struct { arch: std.Target.Cpu.Arch, dir: []const u8 }{
+        .{ .arch = .x86_64, .dir = "x86_64" },
+        .{ .arch = .x86, .dir = "i386" },
+    };
+    for (shim_arches) |s| {
+        const shim = b.addLibrary(.{
+            .name = "veneer-localfs",
+            .linkage = .dynamic,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/localfs/shim.zig"),
+                .target = b.resolveTargetQuery(.{ .cpu_arch = s.arch, .os_tag = .linux, .abi = .gnu }),
+                .optimize = optimize,
+                .link_libc = true,
+                .strip = optimize != .debug,
+            }),
+        });
+        const install_shim = b.addInstallArtifact(shim, .{
+            .dest_dir = .{ .override = .{ .custom = b.fmt("lib/veneer/{s}", .{s.dir}) } },
+        });
+        b.getInstallStep().dependOn(&install_shim.step);
+    }
+
     const run = b.addRunArtifact(exe);
     run.step.dependOn(b.getInstallStep());
     run.addPassthruArgs();

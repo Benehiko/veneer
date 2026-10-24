@@ -84,6 +84,10 @@
             ];
             dontConfigure = true;
             dontBuild = true;
+            dontAutoPatchelf = true;
+            postFixup = ''
+              autoPatchelf $out/bin
+            '';
             installPhase = ''
               runHook preInstall
               export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
