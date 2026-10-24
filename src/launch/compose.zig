@@ -22,6 +22,8 @@ const translators = @import("../runner/translators.zig");
 const steam_runtime = @import("../runner/steam_runtime.zig");
 const jobs = @import("../jobs.zig");
 const stop = @import("stop.zig");
+const localfs = @import("../hooks/localfs.zig");
+const ea_app = @import("ea_app.zig");
 
 pub const Error = error{
     NoExecutable,
@@ -34,6 +36,7 @@ pub const Error = error{
 
 pub const Outcome = struct {
     input: plan.Input,
+    setup: ?plan.Input = null,
     runner_name: []const u8,
 };
 
@@ -238,7 +241,23 @@ pub fn compose(
     try overridden.appendSlice(arena, native_dlls);
     if (effective.optiscaler_dir != null) try overridden.append(arena, optiscaler.proxy_dll);
     if (try translators.nativeOverride(arena, overridden.items)) |value| try vars.append(arena, .{ .name = "WINEDLLOVERRIDES", .value = value });
-    if (game.steam) |s| try vars.appendSlice(arena, try steam_overlay.vars(arena, io, s.root, s.app_id, env.get("LD_PRELOAD")));
+    const prefix = prefixDir(runner);
+    var preload = env.get("LD_PRELOAD");
+    var shimmed = false;
+    if (prefix) |dir| {
+        if (try localfs.onNetwork(arena, dir)) {
+            const libs = try localfs.libraries(arena, io, try std.process.executableDirPathAlloc(io, arena));
+            if (libs.len == 0) {
+                std.log.warn("the Wine prefix {s} is on a network filesystem, and {s} is missing from beside veneer, so Windows programs will see drive C: as a network drive", .{ dir, localfs.lib_name });
+            } else {
+                preload = try localfs.preload(arena, libs, preload);
+                shimmed = true;
+            }
+        }
+    }
+    const overlay_vars: []const plan.EnvVar = if (game.steam) |s| try steam_overlay.vars(arena, io, s.root, s.app_id, preload) else &.{};
+    try vars.appendSlice(arena, overlay_vars);
+    if (shimmed and overlay_vars.len == 0) try vars.append(arena, .{ .name = "LD_PRELOAD", .value = preload.? });
     for (choices.env) |assignment| {
         const v = plan.parseEnvAssignment(assignment) orelse {
             std.log.warn("ignoring '{s}': not NAME=value", .{assignment});
@@ -249,19 +268,45 @@ pub fn compose(
 
     const h = try hooks(arena, io, env, game, runner, effective);
 
-    return .{
-        .runner_name = runner_name,
-        .input = .{
-            .inject = h.inject,
-            .overlay = h.overlay,
-            .exe = exe,
-            .args = args.items,
-            .workdir = game.workdir orelse std.fs.path.dirname(exe) orelse game.install_dir,
-            .app_id = if (game.steam) |s| s.app_id else null,
-            .runner = runner,
-            .wrappers = wrappers,
-            .env = vars.items,
-        },
+    const input: plan.Input = .{
+        .inject = h.inject,
+        .overlay = h.overlay,
+        .exe = exe,
+        .args = args.items,
+        .workdir = game.workdir orelse std.fs.path.dirname(exe) orelse game.install_dir,
+        .app_id = if (game.steam) |s| s.app_id else null,
+        .runner = runner,
+        .wrappers = wrappers,
+        .env = vars.items,
+    };
+    var setup: ?plan.Input = null;
+    if (prefix) |dir| {
+        if (try ea_app.pending(arena, io, exe, game.install_dir, try systemReg(arena, runner, dir))) |installer| {
+            var s = input;
+            s.exe = installer.exe;
+            s.args = try plan.splitArgs(arena, installer.args);
+            s.workdir = std.fs.path.dirname(installer.exe) orelse game.install_dir;
+            s.wrappers = &.{};
+            s.overlay = null;
+            s.inject = null;
+            setup = s;
+        }
+    }
+    return .{ .runner_name = runner_name, .input = input, .setup = setup };
+}
+
+fn systemReg(arena: Allocator, runner: plan.Runner, prefix: []const u8) ![]const u8 {
+    return switch (runner) {
+        .proton => std.fs.path.join(arena, &.{ prefix, "pfx", "system.reg" }),
+        else => std.fs.path.join(arena, &.{ prefix, "system.reg" }),
+    };
+}
+
+fn prefixDir(runner: plan.Runner) ?[]const u8 {
+    return switch (runner) {
+        .proton => |p| p.compat_data,
+        .wine => |w| w.prefix,
+        .native => null,
     };
 }
 
@@ -296,6 +341,7 @@ pub fn explain(err: anyerror) ?[]const u8 {
         error.NoInjector => "veneer-inject.exe is missing from beside the veneer binary; rebuild with `zig build`",
         error.InjectNeedsWine => "DLL injection works only for Windows games under Proton or Wine",
         error.DllNotFound => "a DLL to inject does not exist",
+        error.EaSetupFailed => "the EA app installer did not finish, and this game starts through the EA app; its log is the game's log with .ea-setup in its name",
         else => null,
     };
 }

@@ -85,6 +85,16 @@ pub fn isPlayable(app_type: ?[]const u8, name: []const u8) bool {
     return true;
 }
 
+pub fn isLaunchUrl(executable: []const u8) bool {
+    const colon = std.mem.indexOf(u8, executable, "://") orelse return false;
+    if (colon < 2) return false;
+    if (!std.ascii.isAlphabetic(executable[0])) return false;
+    for (executable[1..colon]) |c| {
+        if (!std.ascii.isAlphanumeric(c) and c != '+' and c != '-' and c != '.') return false;
+    }
+    return true;
+}
+
 pub fn joinGamePath(arena: Allocator, install_dir: []const u8, relative: []const u8) Allocator.Error![]const u8 {
     const rel = try arena.dupe(u8, relative);
     std.mem.replaceScalar(u8, rel, '\\', '/');
@@ -201,11 +211,12 @@ fn scanLibrary(
         };
         if (info) |i| {
             if (appinfo.launchFor(i, platform)) |launch| {
-                game.exe = try joinGamePath(arena, install_dir, launch.executable);
+                game.exe = if (isLaunchUrl(launch.executable)) launch.executable else try joinGamePath(arena, install_dir, launch.executable);
                 game.args = launch.arguments;
                 if (launch.workdir) |w| {
                     if (w.len > 0) game.workdir = try joinGamePath(arena, install_dir, w);
                 }
+                if (game.workdir == null and isLaunchUrl(launch.executable)) game.workdir = install_dir;
             }
         }
         try seen.put(arena, m.app_id, {});
@@ -307,6 +318,15 @@ test "Windows-style launch paths join onto the install directory" {
     defer arena.deinit();
     const p = try joinGamePath(arena.allocator(), "/lib/common/Game", "\\bin\\x64\\game.exe");
     try testing.expectEqualStrings("/lib/common/Game/bin/x64/game.exe", p);
+}
+
+test "a launcher URL is a launch target, not a path in the install directory" {
+    try testing.expect(isLaunchUrl("steam2ea://launchgame/1328660?platform=steam&theme=NFSHP"));
+    try testing.expect(isLaunchUrl("link2ea://launchgame/1238860?platform=steam"));
+    try testing.expect(!isLaunchUrl("bin\\x64\\game.exe"));
+    try testing.expect(!isLaunchUrl("C:\\Games\\game.exe"));
+    try testing.expect(!isLaunchUrl("tools/a://b.exe"));
+    try testing.expect(!isLaunchUrl("://x"));
 }
 
 test "cover art prefers portrait art, in the app folder or a hashed subfolder, over a header" {

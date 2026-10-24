@@ -33,7 +33,7 @@ uninstall:
 	rm -f $(PREFIX)/bin/veneer $(PREFIX)/bin/veneer-inject.exe \
 		$(PREFIX)/share/applications/veneer.desktop \
 		$(PREFIX)/share/icons/hicolor/scalable/apps/veneer.svg
-	rm -rf $(PREFIX)/share/licenses/veneer
+	rm -rf $(PREFIX)/share/licenses/veneer $(PREFIX)/lib/veneer
 
 VERSION ?=
 DIST ?= dist

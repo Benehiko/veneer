@@ -58,6 +58,9 @@ of the launch tests. `execute` spawns the result and logs it.
 | `src/hooks/overlay.zig` | the private overlay mount (`veneer __overlay`) |
 | `src/hooks/optiscaler.zig` | staging an OptiScaler release into a game's overlay |
 | `src/hooks/anticheat.zig` | EasyAntiCheat and BattlEye detection |
+| `src/hooks/localfs.zig` | finding a prefix on a network filesystem, and preloading the shim for it |
+| `src/localfs/` | `libveneer-localfs.so`, which shows Wine a network filesystem as a local one |
+| `src/launch/ea_app.zig` | the EA app setup an EA launcher URL needs, from the game's install script |
 | `src/optiscaler/` | pinned releases, download and checksum, unpacking with the host's `bsdtar`, `7zz` or `7z` |
 | `src/inject/` | `veneer-inject.exe` and the variables it reads |
 | `src/compat/` | system probes (`facts`, `vulkan`) and the rule engine |
@@ -82,6 +85,7 @@ Nothing goes in a game's install.
 | `$XDG_DATA_HOME/veneer/overlay/<id>/{upper,work}` | each game's overlay layer |
 | `$XDG_CACHE_HOME/veneer/library.zon` | the last library scan |
 | `$XDG_STATE_HOME/veneer/logs/<id>.log` | the last launch, and `.prev` before it |
+| `$XDG_STATE_HOME/veneer/logs/<id>.ea-setup.log` | the last EA app setup, and `.prev` before it |
 
 Config files are ZON: `std.zon` reads and writes them, so they cost no
 dependency.
@@ -95,7 +99,10 @@ dependency.
 - **Games:** every `appmanifest_*.acf` whose `StateFlags` has the installed
   bit. `appinfo.vdf` supplies the name, the app type (only games,
   applications, demos and betas are listed) and the launch entry for the
-  platform, skipping beta-branch entries.
+  platform, skipping beta-branch entries. An entry that is a launcher URL,
+  such as EA's `steam2ea://launchgame/<appid>?…` or `link2ea://…`, is kept
+  as the URL and runs in the install directory: Proton's `steam.exe` opens
+  it with `ShellExecute` only when the command line starts with the URL.
 - **Platform:** an explicit compat-tool mapping means Windows (a Steam Linux
   Runtime mapping means Linux); otherwise a Linux entry in `oslist` means
   native; otherwise Windows.
@@ -249,6 +256,39 @@ game. Proton or Wine runs it; it reads the game from `VENEER_GAME_EXE` and
 `Z:`), because environment variables cross Wine unmangled. It creates the
 game suspended, loads each DLL with a remote `LoadLibraryW`, and resumes it.
 
+### Network prefixes
+
+Wine marks a drive as remote when `fstatfs` reports NFS, smbfs, cifs or
+smb2 (`dlls/ntdll/unix/file.c`), and `GetDriveTypeW` then answers
+`DRIVE_REMOTE` before it reads any drive type set in the registry. The EA
+app's installer checks `C:\Program Files\EA Games` that way and refuses a
+network drive, so a prefix on a NAS cannot install it.
+
+When the prefix (`compatdata/<appid>`, or the nearest parent that exists)
+is on such a filesystem, Veneer puts `lib/veneer/i386` and
+`lib/veneer/x86_64` `libveneer-localfs.so` first in `LD_PRELOAD`, ahead of
+Steam's overlay and the player's own libraries. Each process loads the
+build that matches it; the dynamic linker skips the other. The shim wraps
+`statfs`, `fstatfs` and their `64` forms, calls glibc's, and reports those
+four types as ext4. Nothing else changes: the files stay where they are,
+and the prefix works the same from Steam.
+
+### EA app setup
+
+A launch entry of `link2ea://` or `steam2ea://` starts the game through
+the EA app, which Steam installs from the game's install script before the
+first launch. Veneer starts Proton itself, so it runs that step too: it
+reads the `Run Process` entry whose `HasRunStringKey` names
+`Electronic Arts` from any `*installscript.vdf` in the install, and runs
+its `process 1` with `command 1` unless the prefix's `system.reg` already
+holds the `HasRunStringValue` under that key, in either registry view. The
+setup uses the game's Proton and environment, without gamescope, the
+overlay or injection, and logs to `<id>.ea-setup.log`. The game starts
+only if the setup exits with 0.
+
+OptiScaler cannot follow a launcher URL to the exe, so for one it targets
+the install's root, after the Unreal `-Shipping.exe` check.
+
 ### Anti-cheat
 
 The overlay and injection refuse any game with EasyAntiCheat or BattlEye
@@ -335,15 +375,18 @@ complex scripts (Arabic, Hebrew, ligatures) do not render correctly.
 ## Release
 
 `zig build install` puts in place everything a package needs: `bin/veneer`,
-`bin/veneer-inject.exe`, the desktop entry, the icon under
+`bin/veneer-inject.exe`, `lib/veneer/{i386,x86_64}/libveneer-localfs.so`,
+the desktop entry, the icon under
 `share/icons/hicolor/scalable/apps`, and the licenses under
 `share/licenses/veneer`.
 
 The desktop entry's `Exec=` comes from `-Ddesktop-exec`, by default
 `veneer`. A desktop session's `PATH` often lacks `~/.local/bin`, so a bare
 name fails there: `make install` passes `$(PREFIX)/bin/veneer`, the Nix
-package `$out/bin/veneer`. A release tarball keeps the default and carries
-`install.sh`, which copies `bin/` and `share/` to a prefix, rewrites `Exec=`
+package `$out/bin/veneer`. The Nix package patches only `bin/`: the shim
+must use the glibc of the process it loads into. A release tarball keeps
+the default and carries `install.sh`, which copies `bin/`, `lib/` and
+`share/` to a prefix, rewrites `Exec=`
 to that prefix's binary, and rebuilds `share/icons/hicolor/icon-theme.cache`
 if one exists, since a cache built before the icon was installed can hide
 it.

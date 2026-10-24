@@ -55,6 +55,7 @@ pub fn unrealBinaries(arena: Allocator, io: Io, install_dir: []const u8) !?[]con
 pub fn targetWithin(arena: Allocator, io: Io, install_dir: []const u8, exe: []const u8) !?[]const u8 {
     if (isShippingExe(std.fs.path.basename(exe))) return exeDirWithin(install_dir, exe);
     if (try unrealBinaries(arena, io, install_dir)) |rel| return rel;
+    if (std.mem.indexOf(u8, exe, "://") != null) return "";
     return exeDirWithin(install_dir, exe);
 }
 
@@ -137,6 +138,7 @@ test "Unreal games get OptiScaler beside the shipping exe, not the launcher stub
     try testing.expectEqualStrings("HellIsUs/Binaries/Win64", (try targetWithin(a, testing.io, ue, try std.fs.path.join(a, &.{ ue, "HellIsUs.exe" }))).?);
     const pl = try std.fs.path.join(a, &.{ root, "plain" });
     try testing.expectEqualStrings("bin", (try targetWithin(a, testing.io, pl, try std.fs.path.join(a, &.{ pl, "bin", "game.exe" }))).?);
+    try testing.expectEqualStrings("", (try targetWithin(a, testing.io, pl, "steam2ea://launchgame/1?platform=steam")).?);
 }
 
 test "staging links the release beside the exe, renames the DLL, and keeps an edited ini" {

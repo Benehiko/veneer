@@ -78,7 +78,12 @@ The repository rules in [AGENTS.md](../AGENTS.md) enforce these.
   OptiScaler's FSR 4 on non-AMD GPUs; `veneer doctor`; launch refused on an
   error unless forced.
 - **Hooks:** environment; the private overlay mount, with an error per
-  refused step; `veneer-inject.exe`; anti-cheat refusal.
+  refused step; `veneer-inject.exe`; anti-cheat refusal;
+  `libveneer-localfs.so` for prefixes on NFS or SMB, checked through
+  Proton with `GetDriveTypeW`.
+- **EA games:** `link2ea://` and `steam2ea://` launch entries passed to
+  Proton as URLs; the EA app installed from the game's install script
+  before the first launch.
 - **OptiScaler:** pinned releases with SHA-256; download, list-check,
   unpack with the host's tool, symlink check; staging as `dxgi.dll` with
   `dxgi=n,b`, beside the exe or the Unreal `-Shipping.exe`; per-game
